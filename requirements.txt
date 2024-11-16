@@ -1,4 +1,3 @@
-https://gradio-builds.s3.amazonaws.com/http-auth/attempt-1/gradio-3.48.0-py3-none-any.whl
 SpeechRecognition==3.11.0
 openai==1.54.4
 gTTS==2.5.4

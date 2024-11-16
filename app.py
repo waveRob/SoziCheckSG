@@ -28,8 +28,6 @@ GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"}
 BEGINNER_DEF= "beginner (easy reader level 1)"
 ADVANCED_DEF= "advanced (easy reader level 2)"
 
-user_db = {"admin": "admin", "foo": "bar"}
-
 #--------
 beginner_teacher = "Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, easy reader level 1-2. Show interest and emotions in the conversation use emojis. Let's start!"
 advanced_teacher = "You are a language teacher on easy reader level 3-4 ude emojis. Let's start!"
@@ -291,5 +289,4 @@ with gr.Blocks() as app:
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
 
 if __name__ == "__main__":
-    app.launch(enable_queue=False, auth=lambda u, p: user_db.get(u) == p,
-                 auth_message="Login with -> User: admin, Password: admin")
+    app.launch()
