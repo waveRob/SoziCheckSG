@@ -1,10 +1,10 @@
 ---
 title: Loqui
-emoji: ⚡
-colorFrom: gray
-colorTo: red
+emoji: 🌍
+colorFrom: green
+colorTo: blue
 sdk: gradio
-sdk_version: 5.6.0
+sdk_version: 3.48.0
 app_file: app.py
 pinned: false
 license: cc-by-nc-4.0

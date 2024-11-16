@@ -27,6 +27,9 @@ GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"}
 
 BEGINNER_DEF= "beginner (easy reader level 1)"
 ADVANCED_DEF= "advanced (easy reader level 2)"
+
+user_db = {"admin": "admin", "foo": "bar"}
+
 #--------
 beginner_teacher = "Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, easy reader level 1-2. Show interest and emotions in the conversation use emojis. Let's start!"
 advanced_teacher = "You are a language teacher on easy reader level 3-4 ude emojis. Let's start!"
@@ -53,7 +56,7 @@ language_dict = {"english":["en", "en-EN"], "german":["de", "de-DE"],"french":["
 
 #---- init ---- 
 translator = Translator()
-# load_dotenv()
+load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) 
 # --------
@@ -218,7 +221,7 @@ def remove_emojis(text):
     # Substitute matched emojis with an empty string
     return emoji_pattern.sub(r'', text)
 
-with gr.Blocks() as demo:
+with gr.Blocks() as app:
     gr.Markdown("# Language-Teacher")
 
     with gr.Tab("Introduction"):
@@ -287,4 +290,6 @@ with gr.Blocks() as demo:
     trans_chat_btn.click(fn=trans_chat, inputs=[setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
 
-demo.launch()
+if __name__ == "__main__":
+    app.launch(enable_queue=False, auth=lambda u, p: user_db.get(u) == p,
+                 auth_message="Login with -> User: admin, Password: admin")
