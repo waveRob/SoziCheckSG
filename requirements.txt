@@ -1,0 +1,5 @@
+SpeechRecognition==3.11.0
+openai==1.54.4
+gTTS==2.5.4
+googletrans-py==4.0.0
+python-dotenv==1.0.1
