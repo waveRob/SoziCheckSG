@@ -25,15 +25,15 @@ from dotenv import load_dotenv
 
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
 
-BEGINNER_DEF= "beginner (easy reader level 1)"
-ADVANCED_DEF= "advanced (easy reader level 2)"
+BEGINNER_DEF= "beginner (easy reader level 1-2)"
+ADVANCED_DEF= "advanced (easy reader level 3-4)"
 
 #--------
-beginner_teacher = "Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, easy reader level 1-2. Show interest and emotions in the conversation use emojis. Let's start!"
-advanced_teacher = "You are a language teacher on easy reader level 3-4 ude emojis. Let's start!"
+beginner_teacher = f"Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, easy reader level 1-2. Show interest and emotions in the conversation use emojis. Stay on the initial topic help the student to make progress!"
+advanced_teacher = f"You are a language teacher on easy reader level 3-4 ude emojis. Stay on the initial topic help the student to make progress!"
 
 beginner_scenarios = {"restaurant": "You're in a small village at a friendly, old restaurant. The people here are nice and the place is calm. You're going to order some food, so think about what you want to eat.",
-           "present your house": "Your are inviting a friend to your house. You want to show them around and deskribe the rooms and the furniture.",
+           "present your house": "Your are inviting a friend to your house. You want to show them around and describe the rooms, the furniture and how are things positioned to each other.",
            "last vecations": "You are talking to a friend about your last vacation. You want to tell them about the place you visited, the things you did.",
            "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them where you are going and what you are going to do."
            }
@@ -220,11 +220,11 @@ def remove_emojis(text):
     return emoji_pattern.sub(r'', text)
 
 with gr.Blocks() as app:
-    gr.Markdown("# Language-Teacher")
+    gr.Markdown("# LOQUI")
 
     with gr.Tab("Introduction"):
-        gr.Markdown("### Welcome")
-        gr.Markdown("Language-Teacher is an interactive chat tool to practise your active and passive language capabilities.")
+        gr.Markdown("### Welcome!")
+        gr.Markdown("Loqui is an interactive language tool designed for you to practice your active and passive language abilities. To get started, select level, language and scenario, confirm with 'Play Introduction'. Then continue with the 'Conversation' tab above.")
         with gr.Row():
             with gr.Column():
                 setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Level")
@@ -233,7 +233,7 @@ with gr.Blocks() as app:
                     setup_target_language_rad = gr.Radio(list(language_dict.keys()), label="Target-Language")
                     setup_native_language_rad = gr.Radio(list(language_dict.keys()), label="Native-Language")
         setup_scenario_rad = gr.Radio(list(beginner_scenarios.keys()), label="Scenarios")
-        setup_intr_btn = gr.Button("Play introduction")
+        setup_intr_btn = gr.Button("Play Introduction")
         setup_intr_text = gr.Textbox(placeholder="Introduction...",interactive=False)
         
     with gr.Tab("Conversation"):
