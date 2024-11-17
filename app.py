@@ -50,7 +50,7 @@ setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": beginner_scena
          ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": advanced_scenarios}}    
 
 # Dictionary with all languages
-language_dict = {"english":["en", "en-EN"], "german":["de", "de-DE"],"french":["fr", "fr-FR"], "swedish":["sv", "sv-SV"], "spanish":["es", "es-ES"]}
+language_dict = {"swedish":["sv", "sv-SV"], "english":["en", "en-EN"], "german":["de", "de-DE"], "french":["fr", "fr-FR"], "spanish":["es", "es-ES"], "portugese(BR)":["pt", "pt-BR"], "hindi":["hi", "hi-IN"]}
 
 #---- init ---- 
 translator = Translator()

@@ -3,3 +3,4 @@ backup/
 flagged/
 .venv/
 .env
+.gradio/
