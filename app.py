@@ -20,30 +20,30 @@ from io import BytesIO
 import base64
 from googletrans import Translator
 from time import time
+from time import sleep
 import re
 from dotenv import load_dotenv
 
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
 
-BEGINNER_DEF= "beginner (easy reader level 1-2)"
-ADVANCED_DEF= "advanced (easy reader level 3-4)"
+BEGINNER_DEF = "beginner (easy reader level 1-2)"
+ADVANCED_DEF = "advanced (easy reader level 3-4)"
 
-#--------
-beginner_teacher = f"Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, easy reader level 1-2. Show interest and emotions in the conversation use emojis. Stay on the initial topic help the student to make progress!"
-advanced_teacher = f"You are a language teacher on easy reader level 3-4 ude emojis. Stay on the initial topic help the student to make progress!"
+# --------
+beginner_teacher = f"Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, {BEGINNER_DEF.split('(')[1].split(')')[0]}. Show interest and emotions in the conversation use emojis. Stay on the initial topic help the student to make progress!"
+advanced_teacher = f"You are a language teacher on {ADVANCED_DEF.split('(')[1].split(')')[0]} use emojis. Stay on the initial topic help the student to make progress!"
 
-beginner_scenarios = {"restaurant": "You're in a small village at a friendly, old restaurant. The people here are nice and the place is calm. You're going to order some food, so think about what you want to eat.",
-           "present your house": "Your are inviting a friend to your house. You want to show them around and describe the rooms, the furniture and how are things positioned to each other.",
-           "last vecations": "You are talking to a friend about your last vacation. You want to tell them about the place you visited, the things you did.",
-           "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them where you are going and what you are going to do."
-           }
+beginner_scenarios = {
+    "restaurant": "You're in a small village at a friendly, old restaurant. The people here are nice and the place is calm. You're going to order some food, so think about what you want to eat.",
+    "last vecations": "You are talking to a friend about your last vacation. You want to tell them about the place you visited, the things you did.",
+    "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them where you are going and what you are going to do.",
+}
 
 advanced_scenarios = {
     "restaurant": "You’re in a small, cozy restaurant in a village. The waiter smiles and hands you a menu. The smell of tasty food is in the air, and you decide what you’d like to eat. It’s a calm and friendly place.",
-    "present your house": "Your friend visits your house, and you show them around. First, the living room with a comfy couch and a big window. Then, the kitchen, where you like to cook. You point out your favorite things in each room.",
     "last_vacation": "You tell your friend about your last vacation. You went to a place with beaches and clear blue water. You hiked, tried new food, and watched bright sunsets. You share happy memories from the trip.",
-    "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them what you are going to do and why you are looking forward to it."
-    }
+    "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them what you are going to do and why you are looking forward to it.",
+}
 
 
 setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": beginner_scenarios},
@@ -197,6 +197,10 @@ def propose_answer(target_language, native_language, msg_history):
 
     return response_target_lang, response_native_lang, audio_player
 
+def delay():
+    sleep(1)
+    return None
+
 def remove_emojis(text):
     # Emoji pattern covering most emojis
     emoji_pattern = re.compile(
@@ -241,12 +245,12 @@ with gr.Blocks() as app:
         with gr.Row():
             trans_chat_btn = gr.Button("Translate Chat")
         with gr.Row():
-            conv_preview_text = gr.Textbox(placeholder="Preview: modify me",interactive=True)
+            conv_preview_text = gr.Textbox(placeholder="Preview: modify me", interactive=True)
         with gr.Row():
             with gr.Column():
                 conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
             with gr.Column():
-                conv_submit_btn = gr.Button("Submit")
+                conv_submit_btn = gr.Button("Submit", elem_id="conv-submit-btn",variant="primary", interactive=False)
             with gr.Column():
                 conv_clear_btn = gr.Button("Clear")
 
@@ -258,32 +262,32 @@ with gr.Blocks() as app:
             with gr.Column():
                 trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
             with gr.Column():
-                trans_submit_btn = gr.Button("Translate Audio")
+                trans_submit_btn = gr.Button("Translate Audio", variant="primary", interactive=False)
             with gr.Column():
                 trans_clear_btn = gr.Button("Clear")
         with gr.Row():
             trans_propose_btn = gr.Button("Proposal")
 
-        conv_reset_btn = gr.Button("Reset Conversation")
+        conv_reset_btn = gr.Button("Reset Conversation", variant="stop")
 
     # General
     html = gr.HTML()
     state = gr.State([])
     trans_state = gr.State(False)
-
+ 
 
     # Introduction tab
     setup_intr_btn.click(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, setup_intr_text, state])
     
     # Conversation tab
-    conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text])
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state])
+    conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=None, outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[chatbot, state])
 
     # Help tab
-    trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native])
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html])
+    trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
+    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=None, outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
     trans_chat_btn.click(fn=trans_chat, inputs=[setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
