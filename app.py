@@ -30,20 +30,41 @@ BEGINNER_DEF = "beginner (easy reader level 1-2)"
 ADVANCED_DEF = "advanced (easy reader level 3-4)"
 
 # --------
-beginner_teacher = f"""Your are a language teacher using language level {BEGINNER_DEF.split('(')[1].split(')')[0]} respond with 1 sentence max 2 sentences. You are stepping into the role of a person called Sabrina. Imagine Sabrina a 35 years old nurse. Sabrina 
-is a friendly and open person. She is someone who likes here job because she can help people. She does not like about here job that she has sometimes night shifts. Sabrina has time next week on Tuesday at 3pm for a coffee with Maria. Your task is to answer the questions of Maria.
-Stay in your role playing Sabrina, only reveal things from you that are directly asked, use emojis!"""
+beginner_teacher = f"""You are a language teacher using language level {BEGINNER_DEF.split('(')[1].split(')')[0]}.  
+Respond concisely with short **1 to 2 sentences**.
+Encourage simple conversations, do not ask too many questions.  
+Do not reveal unnecessary information unless the user asks directly.  
+Use **emojis** when appropriate to make the conversation engaging!"""
 
-advanced_teacher = f"""Your are a language teacher using language level {ADVANCED_DEF.split('(')[1].split(')')[0]} respond with 2 sentences max 3 sentences. You are stepping into the role of a person called Sabrina. Imagine Sabrina, a 35-year-old nurse.  
-Sabrina is a friendly and open person. She loves her job because she can help people and enjoys working closely with her colleagues as a team player. However, she dislikes that she sometimes has night shifts and finds paperwork frustrating.  
-One thing she really enjoys is the food in the mensa, especially when they serve something warm and homemade-style.  
-Sabrina has time next week on Tuesday at 3 PM for a coffee with Maria ☕.  
-Your task is to answer Marias questions. Stay in your role playing Sabrina, only reveal things step by step about yourself that are directly asked. Use emojis!"""
+
+advanced_teacher = f"""You are a language teacher using language level {ADVANCED_DEF.split('(')[1].split(')')[0]}.  
+Respond in **2 to 3 sentences**, using more complex sentence structures and vocabulary.  
+Encourage meaningful discussions but do not reveal details unless the user explicitly asks.  
+Use **emojis** when appropriate to make the conversation engaging! 😊"""
 
 scenarios = {
-    "Uppgift 1: Möt Sabrina": "You are meeting your friend Sabrina in the city. you know each other from childhood. You ask her about her job.",
-}
+    "Uppgift 1: Möt Sabrina": {
+        "context": """  
+        You are meeting your friend Sabrina in the city.  
+        You have known each other since childhood.  
+        You decide to ask her about her job.  
+        """,
+        
+        "role": """  
+        You are now **Sabrina**, a 35-year-old nurse.  
+        You are friendly and open but do not reveal details about yourself unless explicitly asked.  
+        You like your job because you can help people, but you sometimes struggle with night shifts and paperwork.  
+        You enjoy the cafeteria food and have time next Tuesday at 3 PM for a coffee with Maria.  
+        Answer as **Sabrina** would, revealing details gradually, only when asked.
 
+        You will be in conversation with Maria, who is your childhood friend.
+        You are meeting her in the city.
+
+        The task of the user will be to figure out things about you Sabrina, by asking questions.
+        Use **emojis** where appropriate!
+        """
+    }
+}
 
 setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
          ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": scenarios}}    
@@ -99,19 +120,23 @@ def text2speach(rec_text, language):
 
 
 def initialize_scenario(level, selected_scenario, target_language, msg_history):
+
     teacher_prompt = setup[level]["teacher"]
-    role_prompt = setup[level]["scenarios"][selected_scenario]
+    role_prompt    = setup[level]["scenarios"][selected_scenario]["role"]  # Role-play instruction
+    context_prompt = setup[level]["scenarios"][selected_scenario]["context"]  # Only intro context
 
     
     # Sets up the situation and plays the introduction
     msg_history = [
-        {"role": "system", "content": teacher_prompt}, # check whats happening here
-        {"role": "system", "content": role_prompt}
+        {"role": "system", "content": teacher_prompt},
+        {"role": "system", "content": role_prompt},
         ]
     
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
-    return msg_history
+    context_prompt = translator.translate(context_prompt, dest=language_dict[target_language][0]).text
+
+    return msg_history, context_prompt
 
 def conv_preview_recording(file_path, target_language):
     if file_path is not None:
@@ -155,18 +180,18 @@ def translator_main(preview_text, target_language):
 
 def reset_history(target_language, level, scenario, msg_history):
     # Clears the message history and chat
-    msg_history = initialize_scenario(level, scenario, target_language, msg_history).copy()
+    new_msg_history, _ = initialize_scenario(level, scenario, target_language, msg_history)
+    msg_history = new_msg_history.copy()
     return None, msg_history
 
 def setup_main(target_language, level, scenario, msg_history):
     # Initialize the scenario and play the introduction
-    init_msg = initialize_scenario(level, scenario, target_language, msg_history).copy()
+    init_msg_history, context_promt = initialize_scenario(level, scenario, target_language, msg_history)
+    msg_history = init_msg_history.copy()
 
-    msg_history = init_msg.copy()
-    intr_text = init_msg[1]["content"]
-    audio_player = text2speach(intr_text, language_dict[target_language][0])
+    audio_player = text2speach(context_promt, language_dict[target_language][0])
 
-    return audio_player, intr_text, msg_history
+    return audio_player, context_promt, msg_history
 
 def trans_chat(native_language, trans_state ,msg_history):
     # Translates the chat history and returns the translated chat history and the translation state
@@ -228,7 +253,7 @@ def remove_emojis(text):
     return emoji_pattern.sub(r'', text)
 
 with gr.Blocks() as app:
-    gr.Markdown("# LOQUI")
+    gr.Markdown("# Loqui för SFI")
 
     with gr.Tab("Introduktion"):
         gr.Markdown("### Välkommen!")
@@ -239,9 +264,9 @@ with gr.Blocks() as app:
             with gr.Column():
                 with gr.Row():
                     setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
-                    setup_native_language_rad = gr.Radio(list(language_dict.keys()), label="Modersmål")
+                    setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")
         setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
-        setup_intr_btn = gr.Button("Spela Introduktion", variant="primary")
+        setup_intr_btn = gr.Button("Start", variant="primary")
         setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
         
     with gr.Tab("Konversation"):
