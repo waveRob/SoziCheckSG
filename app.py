@@ -30,28 +30,26 @@ BEGINNER_DEF = "beginner (easy reader level 1-2)"
 ADVANCED_DEF = "advanced (easy reader level 3-4)"
 
 # --------
-beginner_teacher = f"Your role is to play a language teacher. You are in a conversation on beginner level with your student. Hence only use simple language, {BEGINNER_DEF.split('(')[1].split(')')[0]}. Show interest and emotions in the conversation use emojis. Stay on the initial topic help the student to make progress!"
-advanced_teacher = f"You are a language teacher on {ADVANCED_DEF.split('(')[1].split(')')[0]} use emojis. Stay on the initial topic help the student to make progress!"
+beginner_teacher = f"""Your are a language teacher using language level {BEGINNER_DEF.split('(')[1].split(')')[0]} respond with 1 sentence max 2 sentences. You are stepping into the role of a person called Sabrina. Imagine Sabrina a 35 years old nurse. Sabrina 
+is a friendly and open person. She is someone who likes here job because she can help people. She does not like about here job that she has sometimes night shifts. Sabrina has time next week on Tuesday at 3pm for a coffee with Maria. Your task is to answer the questions of Maria.
+Stay in your role playing Sabrina, only reveal things from you that are directly asked, use emojis!"""
 
-beginner_scenarios = {
-    "restaurant": "You're in a small village at a friendly, old restaurant. The people here are nice and the place is calm. You're going to order some food, so think about what you want to eat.",
-    "last vecations": "You are talking to a friend about your last vacation. You want to tell them about the place you visited, the things you did.",
-    "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them where you are going and what you are going to do.",
+advanced_teacher = f"""Your are a language teacher using language level {ADVANCED_DEF.split('(')[1].split(')')[0]} respond with 2 sentences max 3 sentences. You are stepping into the role of a person called Sabrina. Imagine Sabrina, a 35-year-old nurse.  
+Sabrina is a friendly and open person. She loves her job because she can help people and enjoys working closely with her colleagues as a team player. However, she dislikes that she sometimes has night shifts and finds paperwork frustrating.  
+One thing she really enjoys is the food in the mensa, especially when they serve something warm and homemade-style.  
+Sabrina has time next week on Tuesday at 3 PM for a coffee with Maria ☕.  
+Your task is to answer Marias questions. Stay in your role playing Sabrina, only reveal things step by step about yourself that are directly asked. Use emojis!"""
+
+scenarios = {
+    "Uppgift 1: Möt Sabrina": "You are meeting your friend Sabrina in the city. you know each other from childhood. You ask her about her job.",
 }
 
-advanced_scenarios = {
-    "restaurant": "You’re in a small, cozy restaurant in a village. The waiter smiles and hands you a menu. The smell of tasty food is in the air, and you decide what you’d like to eat. It’s a calm and friendly place.",
-    "last_vacation": "You tell your friend about your last vacation. You went to a place with beaches and clear blue water. You hiked, tried new food, and watched bright sunsets. You share happy memories from the trip.",
-    "plans for the weekend": "You are talking to a friend about your plans for the weekend. You want to tell them what you are going to do and why you are looking forward to it.",
-}
 
-
-setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": beginner_scenarios},
-         ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": advanced_scenarios}}    
+setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
+         ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": scenarios}}    
 
 # Dictionary with all languages
 language_dict = {"swedish":["sv", "sv-SV"], "english":["en", "en-EN"], "german":["de", "de-DE"], "french":["fr", "fr-FR"], "spanish":["es", "es-ES"], "portugese(BR)":["pt", "pt-BR"], "hindi":["hi", "hi-IN"]}
-
 #---- init ---- 
 translator = Translator()
 load_dotenv()
@@ -101,9 +99,15 @@ def text2speach(rec_text, language):
 
 
 def initialize_scenario(level, selected_scenario, target_language, msg_history):
+    teacher_prompt = setup[level]["teacher"]
+    role_prompt = setup[level]["scenarios"][selected_scenario]
+
+    
     # Sets up the situation and plays the introduction
-    msg_history = [{"role": "system", "content": setup[level]["teacher"]}, # check whats happening here
-                {"role": "system", "content": setup[level]["scenarios"][selected_scenario]}]
+    msg_history = [
+        {"role": "system", "content": teacher_prompt}, # check whats happening here
+        {"role": "system", "content": role_prompt}
+        ]
     
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
@@ -226,49 +230,48 @@ def remove_emojis(text):
 with gr.Blocks() as app:
     gr.Markdown("# LOQUI")
 
-    with gr.Tab("Introduction"):
-        gr.Markdown("### Welcome!")
-        gr.Markdown("Loqui is an interactive language tool designed for you to practice your active and passive language abilities. To get started, select level, language and scenario, confirm with 'Play Introduction'. Then continue with the 'Conversation' tab above.")
+    with gr.Tab("Introduktion"):
+        gr.Markdown("### Välkommen!")
+        gr.Markdown("Loqui är ett interaktivt språkinlärningsverktyg som hjälper dig att öva både dina aktiva och passiva språkkunskaper. För att komma igång, välj nivå, språk och scenario och bekräfta med 'Spela Introduktion'. Fortsätt sedan med fliken 'Konversation' ovan.")
         with gr.Row():
             with gr.Column():
-                setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Level")
+                setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
             with gr.Column():
                 with gr.Row():
-                    setup_target_language_rad = gr.Radio(list(language_dict.keys()), label="Target-Language")
-                    setup_native_language_rad = gr.Radio(list(language_dict.keys()), label="Native-Language")
-        setup_scenario_rad = gr.Radio(list(beginner_scenarios.keys()), label="Scenarios")
-        setup_intr_btn = gr.Button("Play Introduction")
-        setup_intr_text = gr.Textbox(placeholder="Introduction...",interactive=False)
+                    setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
+                    setup_native_language_rad = gr.Radio(list(language_dict.keys()), label="Modersmål")
+        setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
+        setup_intr_btn = gr.Button("Spela Introduktion", variant="primary")
+        setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
         
-    with gr.Tab("Conversation"):
+    with gr.Tab("Konversation"):
         chatbot = gr.Chatbot()
         with gr.Row():
-            trans_chat_btn = gr.Button("Translate Chat")
+            trans_chat_btn = gr.Button("Översätt Chatt")
         with gr.Row():
-            conv_preview_text = gr.Textbox(placeholder="Preview: modify me", interactive=True)
-        with gr.Row():
-            with gr.Column():
-                conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
-            with gr.Column():
-                conv_submit_btn = gr.Button("Submit", elem_id="conv-submit-btn",variant="primary", interactive=False)
-            with gr.Column():
-                conv_clear_btn = gr.Button("Clear")
-
-
-        trans_tb_target = gr.Textbox(placeholder="Target language",interactive=False)
-        trans_tb_native = gr.Textbox(placeholder="Native laguage: modify me",interactive=True)
-
+            conv_preview_text = gr.Textbox(placeholder="Förhandsgranskning: ändra mig", interactive=True)
         with gr.Row():
             with gr.Column():
-                trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
+                conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
             with gr.Column():
-                trans_submit_btn = gr.Button("Translate Audio", variant="primary", interactive=False)
+                conv_submit_btn = gr.Button("Skicka", elem_id="conv-submit-btn", variant="primary", interactive=False)
             with gr.Column():
-                trans_clear_btn = gr.Button("Clear")
-        with gr.Row():
-            trans_propose_btn = gr.Button("Proposal")
+                conv_clear_btn = gr.Button("Rensa")
 
-        conv_reset_btn = gr.Button("Reset Conversation", variant="stop")
+        trans_tb_target = gr.Textbox(placeholder="Målspråk", interactive=False)
+        trans_tb_native = gr.Textbox(placeholder="Modersmål: ändra mig", interactive=True)
+
+        with gr.Row():
+            with gr.Column():
+                trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
+            with gr.Column():
+                trans_submit_btn = gr.Button("Översätt ljud", variant="primary", interactive=False)
+            with gr.Column():
+                trans_clear_btn = gr.Button("Rensa")
+        with gr.Row():
+            trans_propose_btn = gr.Button("Förslag")
+
+        conv_reset_btn = gr.Button("Återställ konversation", variant="stop")
 
     # General
     html = gr.HTML()
