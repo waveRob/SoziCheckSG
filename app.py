@@ -23,6 +23,7 @@ from time import time
 from time import sleep
 import re
 from dotenv import load_dotenv
+from pydub import AudioSegment
 
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
 
@@ -57,8 +58,8 @@ scenarios = {
         You enjoy the cafeteria food and have time next Tuesday at 3 PM for a coffee with Maria.  
         Answer as **Sabrina** would, revealing details gradually, only when asked.
 
-        You will be in conversation with Maria, who is your childhood friend.
-        You are meeting her in the city.
+        You will be in conversation good old childhood friend.
+        You are meeting this friend in the city.
 
         The task of the user will be to figure out things about you Sabrina, by asking questions.
         Use **emojis** where appropriate!
@@ -104,16 +105,24 @@ def text2speach(rec_text, language):
     rec_text_filtered = remove_emojis(rec_text)
     tts = gtts.gTTS(rec_text_filtered, lang=language)
 
-
     audio_bytes = BytesIO()
     tts.write_to_fp(audio_bytes)
     audio_bytes.seek(0)
 
-    audio = base64.b64encode(audio_bytes.read()).decode("utf-8")
+    mp3_data = audio_bytes.getvalue()
+
+    # Convert audio to base64
+    audio = base64.b64encode(mp3_data).decode("utf-8")
     audio_player = f'<audio src="data:audio/mpeg;base64,{audio}" controls autoplay></audio>'
+    
+    # Get duration using pydub
+    audio_segment = AudioSegment.from_file(BytesIO(mp3_data), format="mp3")
+    duration = audio_segment.duration_seconds  # Duration in seconds
+    print(f"Duration speach: {duration:.2f} seconds")
+    
     end = time()
     print(f"Time text2speach: {end-start}")
-    return audio_player
+    return audio_player, duration
 
 
 # --------
@@ -162,7 +171,7 @@ def main(preview_text, target_language, msg_history):
     msg_history.append({"role": "assistant", "content":respons})
 
     # Converting bot's text response to audio speech
-    audio_player = text2speach(respons, language_dict[target_language][0])
+    audio_player, _ = text2speach(respons, language_dict[target_language][0])
 
     # Creating a list of tuples, each containing a user's message and corresponding bot's response
     msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
@@ -175,7 +184,7 @@ def translator_main(preview_text, target_language):
     translated_text = translator.translate(preview_text, dest=language_dict[target_language][0]).text
 
     # Converting bot's text response to speech in German
-    audio_player = text2speach(translated_text, language_dict[target_language][0])
+    audio_player, _ = text2speach(translated_text, language_dict[target_language][0])
     return translated_text, audio_player
 
 def reset_history(target_language, level, scenario, msg_history):
@@ -189,9 +198,9 @@ def setup_main(target_language, level, scenario, msg_history):
     init_msg_history, context_promt = initialize_scenario(level, scenario, target_language, msg_history)
     msg_history = init_msg_history.copy()
 
-    audio_player = text2speach(context_promt, language_dict[target_language][0])
+    audio_player, duration = text2speach(context_promt, language_dict[target_language][0])
 
-    return audio_player, context_promt, msg_history
+    return audio_player, duration, context_promt, msg_history
 
 def trans_chat(native_language, trans_state ,msg_history):
     # Translates the chat history and returns the translated chat history and the translation state
@@ -222,12 +231,12 @@ def propose_answer(target_language, native_language, msg_history):
     response_native_lang = translator.translate(response_target_lang, dest=language_dict[native_language][0]).text
 
     # Converting bot's text response to speech
-    audio_player = text2speach(response_target_lang,language_dict[target_language][0])
+    audio_player, _ = text2speach(response_target_lang,language_dict[target_language][0])
 
     return response_target_lang, response_native_lang, audio_player
 
-def delay():
-    sleep(1)
+def delay(seconds):
+    sleep(seconds)
     return None
 
 def remove_emojis(text):
@@ -252,70 +261,76 @@ def remove_emojis(text):
     # Substitute matched emojis with an empty string
     return emoji_pattern.sub(r'', text)
 
+def change_tab(id):
+    return gr.Tabs(selected=id)
+
 with gr.Blocks() as app:
     gr.Markdown("# Loqui för SFI")
 
-    with gr.Tab("Introduktion"):
-        gr.Markdown("### Välkommen!")
-        gr.Markdown("Loqui är ett interaktivt språkinlärningsverktyg som hjälper dig att öva både dina aktiva och passiva språkkunskaper. För att komma igång, välj nivå, språk och scenario och bekräfta med 'Spela Introduktion'. Fortsätt sedan med fliken 'Konversation' ovan.")
-        with gr.Row():
-            with gr.Column():
-                setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
-            with gr.Column():
-                with gr.Row():
-                    setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
-                    setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")
-        setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
-        setup_intr_btn = gr.Button("Start", variant="primary")
-        setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
-        
-    with gr.Tab("Konversation"):
-        chatbot = gr.Chatbot()
-        with gr.Row():
-            trans_chat_btn = gr.Button("Översätt Chatt")
-        with gr.Row():
-            conv_preview_text = gr.Textbox(placeholder="Förhandsgranskning: ändra mig", interactive=True)
-        with gr.Row():
-            with gr.Column():
-                conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
-            with gr.Column():
-                conv_submit_btn = gr.Button("Skicka", elem_id="conv-submit-btn", variant="primary", interactive=False)
-            with gr.Column():
-                conv_clear_btn = gr.Button("Rensa")
+    with gr.Tabs() as tabs:
+        with gr.TabItem("Introduktion", id=0):
+            gr.Markdown("### Välkommen!")
+            gr.Markdown("Loqui är ett interaktivt språkinlärningsverktyg som hjälper dig att öva både dina aktiva och passiva språkkunskaper. För att komma igång, välj nivå, språk och scenario och bekräfta med 'Start'.")
+            with gr.Row():
+                with gr.Column():
+                    setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
+                with gr.Column():
+                    with gr.Row():
+                        setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
+                        setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")
+            setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
+            setup_intr_btn = gr.Button("Start", variant="primary")
+            setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
+            
+        with gr.TabItem("Konversation", id=1):
+            chatbot = gr.Chatbot()
+            with gr.Row():
+                trans_chat_btn = gr.Button("Översätt Chatt")
+            with gr.Row():
+                conv_preview_text = gr.Textbox(placeholder="Förhandsgranskning: ändra mig", interactive=True)
+            with gr.Row():
+                with gr.Column():
+                    conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
+                with gr.Column():
+                    conv_submit_btn = gr.Button("Skicka", elem_id="conv-submit-btn", variant="primary", interactive=False)
+                with gr.Column():
+                    conv_clear_btn = gr.Button("Rensa")
 
-        trans_tb_target = gr.Textbox(placeholder="Målspråk", interactive=False)
-        trans_tb_native = gr.Textbox(placeholder="Modersmål: ändra mig", interactive=True)
+            trans_tb_target = gr.Textbox(placeholder="Målspråk", interactive=False)
+            trans_tb_native = gr.Textbox(placeholder="Modersmål: ändra mig", interactive=True)
 
-        with gr.Row():
-            with gr.Column():
-                trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
-            with gr.Column():
-                trans_submit_btn = gr.Button("Översätt ljud", variant="primary", interactive=False)
-            with gr.Column():
-                trans_clear_btn = gr.Button("Rensa")
-        with gr.Row():
-            trans_propose_btn = gr.Button("Förslag")
+            with gr.Row():
+                with gr.Column():
+                    trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Spela in ljud")
+                with gr.Column():
+                    trans_submit_btn = gr.Button("Översätt ljud", variant="primary", interactive=False)
+                with gr.Column():
+                    trans_clear_btn = gr.Button("Rensa")
+            with gr.Row():
+                trans_propose_btn = gr.Button("Förslag")
 
-        conv_reset_btn = gr.Button("Återställ konversation", variant="stop")
+            conv_reset_btn = gr.Button("Återställ konversation", variant="stop")
 
     # General
     html = gr.HTML()
     state = gr.State([])
     trans_state = gr.State(False)
+    speach_duration = gr.Number(0.0, visible=False)
+
  
 
     # Introduction tab
-    setup_intr_btn.click(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, setup_intr_text, state])
+    setup_intr_btn.click(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=None, outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(1.0, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[chatbot, state])
 
     # Help tab
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=None, outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
+    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(1.0, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
     trans_chat_btn.click(fn=trans_chat, inputs=[setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
