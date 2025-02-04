@@ -41,13 +41,13 @@ Use **emojis** when appropriate to make the conversation engaging!"""
 advanced_teacher = f"""You are a language teacher using language level {ADVANCED_DEF.split('(')[1].split(')')[0]}.  
 Respond in **2 to 3 sentences**, using more complex sentence structures and vocabulary.  
 Encourage meaningful discussions but do not reveal details unless the user explicitly asks.  
-Use **emojis** when appropriate to make the conversation engaging! 😊"""
+Use **emojis** when appropriate to make the conversation engaging!"""
 
 scenarios = {
     "Uppgift 1: Möt Sabrina": {
         "context": """  
         You are meeting your friend Sabrina in the city.  
-        You have known each other since childhood.  
+        The two of you have known each other since childhood.  
         You decide to ask her about her job.  
         """,
         
@@ -235,9 +235,72 @@ def propose_answer(target_language, native_language, msg_history):
 
     return response_target_lang, response_native_lang, audio_player
 
+# Function to generate chat analysis
+def chat_analysis(native_language, chat_history, max_length=500):
+
+    english_prompt = f"""
+You are an expert in the Swedish language and a language coach specializing in helping learners improve their Swedish.
+Your task is to analyze a user's Swedish conversation and identify any mistakes related to:
+- **Grammar** (e.g., incorrect verb conjugation, word gender, possessive pronouns)
+- **Word choice** (e.g., incorrect vocabulary usage)
+- **Word order** (e.g., incorrect sentence structure)
+- **Spelling errors** (e.g., typos or incorrect spellings)
+
+- **Except for punctuation and capitalisation** (e.g., no missing periods, no commas, or question marks, disregard errors small and big letters)
+
+IMPORTANT: Your response must be written entirely in {native_language}.
+
+For each mistake, follow this structure:
+1. **Highlight the incorrect phrase** using quotation marks.
+2. **Provide a corrected version** of the phrase.
+3. **Explain why it is incorrect** (e.g., grammatical rule, word choice, word order).
+4. **Summarize common mistakes** made by the user at the end.
+
+example structure:
+### ❌ Mistake: ...
+✅ Correction: **...**
+📝 *Mistake:* ...
+
+...
+
+## 🔍 **Short Overall Observations**
+
+...
+
+Now, analyze the following chat conversation and provide your response entirely in {native_language}.  
+Keep your answer concise, but ensure it remains **detailed and informative**.  
+Aim for brevity while keeping it **under {max_length - 100} tokens**:
+"""
+
+
+    # Translate the prompt into the target language
+    translated_prompt = translator.translate(english_prompt, dest=native_language).text
+
+
+    # Remove the first two messages (system messages)
+    chat_only_history = chat_history[2:]
+
+    # Add chat history to the prompt
+    chat_text = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_only_history])
+
+    messages = [
+        {"role": "system", "content": translated_prompt},
+
+        {"role": "user", "content": chat_text},
+    ]
+
+    completion = client.chat.completions.create(model=GPT_MODEL, messages=messages, max_tokens=max_length)
+    answere = completion.choices[0].message.content
+
+    return answere
+
+
 def delay(seconds):
     sleep(seconds)
     return None
+
+def display_waiting_text():
+    return "### Detta kan ta några sekunder..."
 
 def remove_emojis(text):
     # Emoji pattern covering most emojis
@@ -268,20 +331,28 @@ with gr.Blocks() as app:
     gr.Markdown("# Loqui för SFI")
 
     with gr.Tabs() as tabs:
-        with gr.TabItem("Introduktion", id=0):
+
+        # --------------- INTRODUCTION TAB ---------------
+        with gr.TabItem("Start", id=0):
             gr.Markdown("### Välkommen!")
-            gr.Markdown("Loqui är ett interaktivt språkinlärningsverktyg som hjälper dig att öva både dina aktiva och passiva språkkunskaper. För att komma igång, välj nivå, språk och scenario och bekräfta med 'Start'.")
+            gr.Markdown("Loqui är ett interaktivt språkinlärningsverktyg som hjälper dig att öva både dina aktiva och passiva språkkunskaper. För att komma igång, välj nivå, språk och scenario och bekräfta med 'Start'.") 
+            
             with gr.Row():
                 with gr.Column():
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
                 with gr.Column():
                     with gr.Row():
                         setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
-                        setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")
+                        setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
-            setup_intr_btn = gr.Button("Start", variant="primary")
-            setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
-            
+
+            with gr.Row():
+                setup_intr_text = gr.Textbox(placeholder="Introduktion...", interactive=False)
+
+            with gr.Row():
+                setup_intr_btn = gr.Button("Start", variant="primary", interactive=True)
+
+        # --------------- KONVERSATION TAB ---------------
         with gr.TabItem("Konversation", id=1):
             chatbot = gr.Chatbot()
             with gr.Row():
@@ -311,6 +382,17 @@ with gr.Blocks() as app:
 
             conv_reset_btn = gr.Button("Återställ konversation", variant="stop")
 
+        # --------------- ANALYSIS TAB --------------- 
+        with gr.TabItem("Analys", id=2):
+            gr.Markdown("## Analys")
+
+            analysis_output = gr.Markdown()
+            analyze_chat_btn = gr.Button("Generera analys", variant="primary", interactive=True)
+
+            
+
+
+
     # General
     html = gr.HTML()
     state = gr.State([])
@@ -320,20 +402,22 @@ with gr.Blocks() as app:
  
 
     # Introduction tab
-    setup_intr_btn.click(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(1.0, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[chatbot, state])
 
     # Help tab
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(1.0, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
+    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
     trans_chat_btn.click(fn=trans_chat, inputs=[setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
 
+    # Analysis tab
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_output).then(fn=chat_analysis, inputs=[setup_native_language_rad, state], outputs=analysis_output)
 if __name__ == "__main__":
     app.launch()
