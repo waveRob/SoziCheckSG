@@ -420,4 +420,4 @@ with gr.Blocks() as app:
     # Analysis tab
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_output).then(fn=chat_analysis, inputs=[setup_native_language_rad, state], outputs=analysis_output)
 if __name__ == "__main__":
-    app.launch()
+    app.launch(ssr_mode=False)
