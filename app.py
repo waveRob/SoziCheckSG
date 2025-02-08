@@ -24,6 +24,7 @@ from time import time
 from time import sleep
 from dotenv import load_dotenv
 from pydub import AudioSegment
+import spacy
 
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
 
@@ -72,6 +73,16 @@ setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
 
 # Dictionary with all languages
 language_dict = {"swedish":["sv", "sv-SV"], "english":["en", "en-EN"], "german":["de", "de-DE"], "french":["fr", "fr-FR"], "spanish":["es", "es-ES"], "portugese(BR)":["pt", "pt-BR"], "hindi":["hi", "hi-IN"]}
+
+# Available spaCy models
+SPACY_MODELS = {
+    "english": "en_core_web_sm",   # English
+    "swedish": "sv_core_news_sm",  # Swedish
+    "german": "de_core_news_sm",  # German
+    "french": "fr_core_news_sm",  # French
+    "spanish": "es_core_news_sm",  # Spanish
+}
+
 #---- init ---- 
 translator = Translator()
 load_dotenv()
@@ -258,7 +269,7 @@ Because the user is speaking casually and cannot set punctuation or capitalizati
 
 ### **Language Proficiency Rating (1-5)**
 - **1**: Beginner: No knowledge of the language.
-- **2**: Basic: Can answer simple questions, but the conversation leads nowhere or feels awkward.
+- **2**: Basic: Can answer simple, but the conversation is fragmented or feels awkward.
 - **3**: Basic Plus: Can hold a simple conversation however using short sentences and alot of mistakes.
 - **4**: Intermediate: Can hold a natural conversation but makes frequent mistakes while using shorter sentences.
 - **5**: Intermediate Plus: Can hold a natural conversation with frequent mistakes however builds longer sentences and uses diverse, vocabulary.
@@ -318,62 +329,40 @@ Try to keep your answer **under {max_length - 100} tokens**.
     return answere
 
 
+def load_spacy_model(target_language):
+    """Load spaCy model if available for the target language."""
+    model_name = SPACY_MODELS.get(target_language)
+    if model_name:
+        try:
+            return spacy.load(model_name)
+        except OSError:
+            print(f"⚠️ Model {model_name} not found. Falling back to GPT.")
+    return None
+
+
 def analyze_words(target_language, msg_history, word_dict):
-    print("---> Analyzing words...")
+
     text = msg_history[-2]["content"]
-    english_prompt = f"""
-    Analyze the following spoken text and categorize words into nouns, verbs, and adjectives.
-    Ignore missing punctuation and capitalization, as this is a transcription of a casual spoken conversation.
-    Return words in their base form (lemma) to avoid duplicates.
 
-    **Rules:**
-    - **Nouns**: Include only proper nouns and common nouns. Exclude pronouns.
-    - **Verbs**: Include action words and state-of-being verbs.
-    - **Adjectives**: Include only descriptive words modifying nouns.
-    - **DO NOT include** pronouns, adverbs, interjections, determiners, conjunctions, or prepositions.
-    """
-    prompt = translator.translate(english_prompt, dest=target_language).text
+    # Step 1: Try using spaCy
+    nlp = load_spacy_model(target_language)
+    if nlp:
+        doc = nlp(text.lower())  # Process text with spaCy
 
-    prompt += f"""
-    Text: "{text}"
-    
-    {{
-        "nouns": ["word1", "word2"],
-        "verbs": ["word3", "word4"],
-        "adjectives": ["word5", "word6"]
-    }}
-    """
+        # Extract words into categories
+        nouns = {token.lemma_ for token in doc if token.pos_ == "NOUN"}
+        verbs = {token.lemma_ for token in doc if token.pos_ == "VERB"}
+        adjectives = {token.lemma_ for token in doc if token.pos_ == "ADJ"}
 
-    messages = [
-        {"role": "system", "content": "You are a linguistic expert analyzing spoken language."},
-        {"role": "user", "content": prompt}
-    ]
+        # Update word dictionary
+        word_dict["nouns"].update(nouns)
+        word_dict["verbs"].update(verbs)
+        word_dict["adjectives"].update(adjectives)
 
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=messages,
-        max_tokens=200,
-        temperature=0
-    )
+        print("Processed using spaCy:", word_dict)
 
-    # Extract response
-    response_text = completion.choices[0].message.content
-    print(text)
-    print(response_text)
-
-    try:
-        parsed_response = json.loads(extract_json(response_text))
-
-        # Append new words to existing sets
-        word_dict["nouns"].update(parsed_response.get("nouns", []))
-        word_dict["verbs"].update(parsed_response.get("verbs", []))
-        word_dict["adjectives"].update(parsed_response.get("adjectives", []))
-        print(word_dict)
-
-    except json.JSONDecodeError:
-        print ("Error, Invalid response from GPT model. Try again.")
-    
     return word_dict
+
 
 def extract_json(text):
     """Find and extract JSON from a GPT response using regex."""
@@ -383,11 +372,12 @@ def extract_json(text):
     return None
     
 def viz_word_score(word_dict):
-    """Generates a Markdown table with word counts and a star visualization."""
-    
-    # Table Header
-    table = "| Category   | Count | Visualization |\n"
-    table += "|------------|-------|---------------|\n"
+    """Generates a Markdown table with centered content using HTML styling."""
+       
+    # Centered Table Using HTML
+    table = '<div align="center">\n\n'
+    table += "| **Category**   | **Count** | **Visualization** |\n"
+    table += "|:--------------:|:--------:|:------------------:|\n"  # Center align everything
     
     # Categories to process
     categories = ["nouns", "verbs", "adjectives"]
@@ -396,7 +386,9 @@ def viz_word_score(word_dict):
         count = len(word_dict.get(category, []))  # Get word count
         stars = "⭐️" * count if count > 0 else "—"  # Show stars or a dash if empty
         
-        table += f"| {category.capitalize():<10} |  {count:^5} | {stars:<15} |\n"
+        table += f"| {category.capitalize()} | {count} | {stars} |\n"
+    
+    table += "\n</div>\n"  # Close the HTML div
     
     return table
 
@@ -482,7 +474,7 @@ with gr.Blocks() as app:
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
                 with gr.Column():
                     with gr.Row():
-                        setup_target_language_rad = gr.Radio(list(language_dict.keys())[0:-1], label="Målspråk")
+                        setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
                         setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
 
@@ -551,7 +543,7 @@ with gr.Blocks() as app:
  
 
     # Introduction tab
-    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
