@@ -9,19 +9,19 @@ For more details about the license, visit: https://creativecommons.org/licenses/
 For commercial use or inquiries, please contact: robert.fuellemann@gmail.com
 """
 
-
+import os
+import json
+import re
 import gradio as gr
 import speech_recognition as sr
 import copy
 from openai import OpenAI
 import gtts
-import os
 from io import BytesIO
 import base64
 from googletrans import Translator
 from time import time
 from time import sleep
-import re
 from dotenv import load_dotenv
 from pydub import AudioSegment
 
@@ -236,40 +236,63 @@ def propose_answer(target_language, native_language, msg_history):
     return response_target_lang, response_native_lang, audio_player
 
 # Function to generate chat analysis
-def chat_analysis(native_language, chat_history, max_length=500):
+def chat_analysis(target_language, native_language, chat_history, max_length=500):
 
     english_prompt = f"""
-You are an expert in the Swedish language and a language coach specializing in helping learners improve their Swedish.
-Your task is to analyze a user's Swedish conversation and identify any mistakes related to:
+You are an expert in the {target_language} language and a language coach specializing in helping learners improve their {target_language}.
+
+Your task is to analyze a user's spoken (casual) {target_language} conversation, focusing only on:
 - **Grammar** (e.g., incorrect verb conjugation, word gender, possessive pronouns)
 - **Word choice** (e.g., incorrect vocabulary usage)
 - **Word order** (e.g., incorrect sentence structure)
 - **Spelling errors** (e.g., typos or incorrect spellings)
 
-- **Except for punctuation and capitalisation** (e.g., no missing periods, no commas, or question marks, disregard errors small and big letters)
+**Ignore** any issues related to:
+- Punctuation (periods, commas, question marks, etc.)
+- Capitalization (upper/lower case usage)
+- Missing sentence separations
 
-IMPORTANT: Your response must be written entirely in {native_language}.
+Because the user is speaking casually and cannot set punctuation or capitalization, these are **not** considered mistakes for this evaluation.
 
-For each mistake, follow this structure:
+---
+
+### **Language Proficiency Rating (1-5)**
+- **1**: Beginner: No knowledge of the language.
+- **2**: Basic: Can answer simple questions, but the conversation leads nowhere or feels awkward.
+- **3**: Basic Plus: Can hold a simple conversation however using short sentences and alot of mistakes.
+- **4**: Intermediate: Can hold a natural conversation but makes frequent mistakes while using shorter sentences.
+- **5**: Intermediate Plus: Can hold a natural conversation with frequent mistakes however builds longer sentences and uses diverse, vocabulary.
+
+Be **generous** with this rating. If the user shows little to no grammatical or spelling errors, they should receive the highest rating excellent (6/5).
+
+---
+
+### **Output Requirements**
+**Write your entire response in {native_language}.**  
+If the conversation has **no mistakes** (apart from disregarded punctuation/capitalization issues), then simply **congratulate** the user with a short message. **Do not** list any mistakes in that case.
+
+Otherwise, for each mistake:
 1. **Highlight the incorrect phrase** using quotation marks.
 2. **Provide a corrected version** of the phrase.
 3. **Explain why it is incorrect** (e.g., grammatical rule, word choice, word order).
 4. **Summarize common mistakes** made by the user at the end.
 
-example structure:
 ### ❌ Mistake: ...
 ✅ Correction: **...**
 📝 *Mistake:* ...
 
-...
+After listing mistakes (if any), include:
 
 ## 🔍 **Short Overall Observations**
 
-...
+## 🤓 **Language proficiency**
+Laguage score: x/5
+
+Where x is your generous estimate of the user's language level based on the conversation.
 
 Now, analyze the following chat conversation and provide your response entirely in {native_language}.  
-Keep your answer concise, but ensure it remains **detailed and informative**.  
-Aim for brevity while keeping it **under {max_length - 100} tokens**:
+Keep your answer concise but **detailed** enough to be **informative**.  
+Try to keep your answer **under {max_length - 100} tokens**.
 """
 
 
@@ -295,6 +318,123 @@ Aim for brevity while keeping it **under {max_length - 100} tokens**:
     return answere
 
 
+def analyze_words(target_language, msg_history, word_dict):
+    print("---> Analyzing words...")
+    text = msg_history[-2]["content"]
+    english_prompt = f"""
+    Analyze the following spoken text and categorize words into nouns, verbs, and adjectives.
+    Ignore missing punctuation and capitalization, as this is a transcription of a casual spoken conversation.
+    Return words in their base form (lemma) to avoid duplicates.
+
+    **Rules:**
+    - **Nouns**: Include only proper nouns and common nouns. Exclude pronouns.
+    - **Verbs**: Include action words and state-of-being verbs.
+    - **Adjectives**: Include only descriptive words modifying nouns.
+    - **DO NOT include** pronouns, adverbs, interjections, determiners, conjunctions, or prepositions.
+    """
+    prompt = translator.translate(english_prompt, dest=target_language).text
+
+    prompt += f"""
+    Text: "{text}"
+    
+    {{
+        "nouns": ["word1", "word2"],
+        "verbs": ["word3", "word4"],
+        "adjectives": ["word5", "word6"]
+    }}
+    """
+
+    messages = [
+        {"role": "system", "content": "You are a linguistic expert analyzing spoken language."},
+        {"role": "user", "content": prompt}
+    ]
+
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        max_tokens=200,
+        temperature=0
+    )
+
+    # Extract response
+    response_text = completion.choices[0].message.content
+    print(text)
+    print(response_text)
+
+    try:
+        parsed_response = json.loads(extract_json(response_text))
+
+        # Append new words to existing sets
+        word_dict["nouns"].update(parsed_response.get("nouns", []))
+        word_dict["verbs"].update(parsed_response.get("verbs", []))
+        word_dict["adjectives"].update(parsed_response.get("adjectives", []))
+        print(word_dict)
+
+    except json.JSONDecodeError:
+        print ("Error, Invalid response from GPT model. Try again.")
+    
+    return word_dict
+
+def extract_json(text):
+    """Find and extract JSON from a GPT response using regex."""
+    match = re.search(r'\{[\s\S]*\}', text)  # Find JSON structure
+    if match:
+        return match.group(0)  # Return only the JSON part
+    return None
+    
+def viz_word_score(word_dict):
+    """Generates a Markdown table with word counts and a star visualization."""
+    
+    # Table Header
+    table = "| Category   | Count | Visualization |\n"
+    table += "|------------|-------|---------------|\n"
+    
+    # Categories to process
+    categories = ["nouns", "verbs", "adjectives"]
+    
+    for category in categories:
+        count = len(word_dict.get(category, []))  # Get word count
+        stars = "⭐️" * count if count > 0 else "—"  # Show stars or a dash if empty
+        
+        table += f"| {category.capitalize():<10} |  {count:^5} | {stars:<15} |\n"
+    
+    return table
+
+def viz_word_dict(word_dict):
+    """Visualizes the words used in each category with fun milestone emojis."""
+    
+    # Define milestone achievements
+    milestones = {
+        0:  "🌱 Starting out!      ",
+        5:  "🎖️ Growing vocabulary!",
+        10: "🏆 Impressive range!  ",
+        15: "📯 Mastery achieved!  ",
+    }
+
+    # Start Markdown table
+    table = "\n\n## 📊 Word Analysis Overview\n\n"
+    table += "| Category   | Count | Words Used |\n"
+    table += "|------------|-------|------------|\n"
+
+    # Process each category
+    for category in ["nouns", "verbs", "adjectives"]:
+        words = sorted(word_dict.get(category, []))  # Sort words alphabetically for readability
+        count = len(words)  # Get word count
+        
+        # Get milestone emoji (if applicable)
+        milestone_emoji = ""
+        for threshold, emoji in sorted(milestones.items()):
+            if count >= threshold:
+                milestone_emoji = emoji
+        
+        # Convert word list to string or show a dash if empty
+        words_str = ", ".join(words) if words else "—"
+
+        # Add row to table
+        table += f"| {category.capitalize():<10} | {milestone_emoji} -> {count:^5} | {words_str} |\n"
+
+    return table
+    
 def delay(seconds):
     sleep(seconds)
     return None
@@ -342,7 +482,7 @@ with gr.Blocks() as app:
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
                 with gr.Column():
                     with gr.Row():
-                        setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
+                        setup_target_language_rad = gr.Radio(list(language_dict.keys())[0:-1], label="Målspråk")
                         setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
 
@@ -354,6 +494,8 @@ with gr.Blocks() as app:
 
         # --------------- KONVERSATION TAB ---------------
         with gr.TabItem("Konversation", id=1):
+            gr.Markdown("## Konversation")
+            word_scor_markdown = gr.Markdown()
             chatbot = gr.Chatbot()
             with gr.Row():
                 trans_chat_btn = gr.Button("Översätt Chatt")
@@ -367,6 +509,7 @@ with gr.Blocks() as app:
                 with gr.Column():
                     conv_clear_btn = gr.Button("Rensa")
 
+            gr.Markdown("## Översättning")
             trans_tb_target = gr.Textbox(placeholder="Målspråk", interactive=False)
             trans_tb_native = gr.Textbox(placeholder="Modersmål: ändra mig", interactive=True)
 
@@ -386,7 +529,8 @@ with gr.Blocks() as app:
         with gr.TabItem("Analys", id=2):
             gr.Markdown("## Analys")
 
-            analysis_output = gr.Markdown()
+            analysis_markdown = gr.Markdown()
+            viz_word_dict_markdown = gr.Markdown()
             analyze_chat_btn = gr.Button("Generera analys", variant="primary", interactive=True)
 
             
@@ -398,6 +542,11 @@ with gr.Blocks() as app:
     state = gr.State([])
     trans_state = gr.State(False)
     speach_duration = gr.Number(0.0, visible=False)
+    word_dict = gr.State({
+        "nouns": set(),
+        "verbs": set(),
+        "adjectives": set()
+    })
 
  
 
@@ -406,7 +555,7 @@ with gr.Blocks() as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn).then(fn=analyze_words, inputs=[setup_target_language_rad, state, word_dict], outputs=[word_dict]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown])
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[chatbot, state])
 
@@ -418,6 +567,6 @@ with gr.Blocks() as app:
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_output).then(fn=chat_analysis, inputs=[setup_native_language_rad, state], outputs=analysis_output)
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict], outputs=[viz_word_dict_markdown])
 if __name__ == "__main__":
     app.launch(ssr_mode=False)
