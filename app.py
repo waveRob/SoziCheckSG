@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from pydub import AudioSegment
 import spacy
 
+
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
 
 BEGINNER_DEF = "beginner (easy reader level 1-2)"
@@ -135,6 +136,21 @@ def text2speach(rec_text, language):
     print(f"Time text2speach: {end-start}")
     return audio_player, duration
 
+def gpt_translate(text, text_language, target_language):
+    messages = [
+        {"role": "system", "content": "You are a translation assistant. Always respond with only the translated text."},
+        {"role": "user", "content": f"Translate the following text from {text_language} to {target_language}. Only return the translated text, without any additional information:\n\n{text}"}
+    ]
+
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        max_tokens=200,
+        temperature=0
+    )
+
+    return completion.choices[0].message.content.strip()
+
 
 # --------
 
@@ -154,7 +170,8 @@ def initialize_scenario(level, selected_scenario, target_language, msg_history):
     
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
-    context_prompt = translator.translate(context_prompt, dest=language_dict[target_language][0]).text
+
+    context_prompt = gpt_translate(context_prompt, "english", target_language)
 
     return msg_history, context_prompt
 
@@ -188,11 +205,11 @@ def main(preview_text, target_language, msg_history):
     msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
     return msg_chat, audio_player, None, None, msg_history
 
-def translator_main(preview_text, target_language):
+def translator_main(preview_text, native_language, target_language):
     # Translates the preview text to the target language and returns the translated text and the audio
 
     # Translating the preview text
-    translated_text = translator.translate(preview_text, dest=language_dict[target_language][0]).text
+    translated_text = gpt_translate(preview_text, native_language, target_language)
 
     # Converting bot's text response to speech in German
     audio_player, _ = text2speach(translated_text, language_dict[target_language][0])
@@ -213,14 +230,15 @@ def setup_main(target_language, level, scenario, msg_history):
 
     return audio_player, duration, context_promt, msg_history
 
-def trans_chat(native_language, trans_state ,msg_history):
+def trans_chat(target_language, native_language, trans_state ,msg_history):
     # Translates the chat history and returns the translated chat history and the translation state
     trans_state = not trans_state
     if trans_state:
         trans_msg_history = copy.deepcopy(msg_history)
         for i in range(2, len(msg_history)-1, 2):
-            trans_msg_history[i]["content"] = translator.translate(msg_history[i]["content"], dest=language_dict[native_language][0]).text
-            trans_msg_history[i+1]["content"] = translator.translate(msg_history[i+1]["content"], dest=language_dict[native_language][0]).text
+            trans_msg_history[i]["content"] = gpt_translate(msg_history[i]["content"], target_language, native_language)
+            trans_msg_history[i+1]["content"] = gpt_translate(msg_history[i+1]["content"], target_language, native_language)
+            
             msg_chat = [(trans_msg_history[i]["content"], trans_msg_history[i+1]["content"]) for i in range(2, len(trans_msg_history)-1, 2)]
     else:
         msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
@@ -426,7 +444,8 @@ def viz_word_dict(word_dict):
         table += f"| {category.capitalize():<10} | {milestone_emoji} -> {count:^5} | {words_str} |\n"
 
     return table
-    
+  
+
 def delay(seconds):
     sleep(seconds)
     return None
@@ -553,9 +572,9 @@ with gr.Blocks() as app:
 
     # Help tab
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
+    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native,setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
-    trans_chat_btn.click(fn=trans_chat, inputs=[setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
+    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
