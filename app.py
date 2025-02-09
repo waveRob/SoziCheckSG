@@ -387,14 +387,6 @@ def analyze_words(target_language, msg_history, word_dict):
 
     return word_dict
 
-
-def extract_json(text):
-    """Find and extract JSON from a GPT response using regex."""
-    match = re.search(r'\{[\s\S]*\}', text)  # Find JSON structure
-    if match:
-        return match.group(0)  # Return only the JSON part
-    return None
-    
 def viz_word_score(word_dict):
     """Generates a Markdown table with centered content using HTML styling."""
        
@@ -410,14 +402,54 @@ def viz_word_score(word_dict):
         count = len(word_dict.get(category, []))  # Get word count
         stars = "⭐️" * count if count > 0 else "—"  # Show stars or a dash if empty
         
-        table += f"| {category.capitalize()} | {count} | {stars} |\n"
+        table += f"| {category.capitalize()} | ~{count} | {stars} |\n"
     
     table += "\n</div>\n"  # Close the HTML div
     
     return table
 
-def viz_word_dict(word_dict):
+def gpt_word_check(dict, target_language):
+
+    # Convert sets to lists
+    for key, value in dict.items():
+        dict[key] = list(value)
+
+    messages = [
+        {"role": "system", "content": f"You are a linguistics expert verifying word classifications in {target_language}. Given sets of nouns, verbs, and adjectives, some words may be misclassified. Your task is to review and return only correctly categorized words."},
+        {"role": "user", "content": f"These words were auto-classified: {dict}\n Return a cleaned dictionary, keeping only correctly categorized words."},
+    ]
+
+    completion = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        max_tokens=200,
+        temperature=0
+    )
+
+    return extract_json(completion.choices[0].message.content.strip())
+
+def extract_json(text):
+    text = text.replace("'", '"')  # Replace single quotes with double quotes
+    
+    """Extract JSON from GPT response and ensure it is a dictionary."""
+    match = re.search(r'\{[\s\S]*\}', text)  # Find JSON structure
+    if match:
+        try:
+            extracted_json = json.loads(match.group(0).replace("'", '"'))  # Parse JSON
+            if isinstance(extracted_json, dict):  # Ensure it's a dictionary
+                return extracted_json
+        except json.JSONDecodeError:
+            pass  # Ignore invalid JSON
+    return None
+
+def viz_word_dict(word_dict, target_language):
     """Visualizes the words used in each category with fun milestone emojis."""
+
+    # Filter words
+    print("Before GPT check:", word_dict)
+    checked_word_dict = gpt_word_check(word_dict, target_language)
+    word_dict = checked_word_dict if checked_word_dict is not None else word_dict
+    print("After GPT check:", word_dict)
     
     # Define milestone achievements
     milestones = {
@@ -499,7 +531,7 @@ with gr.Blocks() as app:
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
                 with gr.Column():
                     with gr.Row():
-                        setup_target_language_rad = gr.Radio(list(language_dict.keys())[0:], label="Målspråk")
+                        setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
                         setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
 
@@ -585,6 +617,7 @@ with gr.Blocks() as app:
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict], outputs=[viz_word_dict_markdown])
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict, setup_target_language_rad], outputs=[viz_word_dict_markdown])
+
 if __name__ == "__main__":
     app.launch(ssr_mode=False)
