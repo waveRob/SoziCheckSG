@@ -230,20 +230,26 @@ def setup_main(target_language, level, scenario, msg_history):
 
     return audio_player, duration, context_promt, msg_history
 
-def trans_chat(target_language, native_language, trans_state ,msg_history):
-    # Translates the chat history and returns the translated chat history and the translation state
-    trans_state = not trans_state
-    if trans_state:
-        trans_msg_history = copy.deepcopy(msg_history)
-        for i in range(2, len(msg_history)-1, 2):
-            trans_msg_history[i]["content"] = gpt_translate(msg_history[i]["content"], target_language, native_language)
-            trans_msg_history[i+1]["content"] = gpt_translate(msg_history[i+1]["content"], target_language, native_language)
-            
-            msg_chat = [(trans_msg_history[i]["content"], trans_msg_history[i+1]["content"]) for i in range(2, len(trans_msg_history)-1, 2)]
-    else:
-        msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
+def trans_chat(target_language, native_language, trans_status, trans_msg_history, msg_history):
 
-    return msg_chat, trans_state, msg_history
+    trans_status = not trans_status  # Toggle translation state
+
+    if trans_status:
+        for i in range(2, len(msg_history) - 1, 2):
+            # Check if message was already translated
+            if i > len(trans_msg_history)-1:
+                trans_msg_history.append({"role": "user", "content": gpt_translate(msg_history[i]["content"], target_language, native_language)})
+            if i + 1 > len(trans_msg_history)-1:
+                trans_msg_history.append({"role": "assistant", "content": gpt_translate(msg_history[i + 1]["content"], target_language, native_language)})
+
+        # Create tuple pairs for translated chat
+        msg_chat = [(trans_msg_history[i]["content"], trans_msg_history[i + 1]["content"]) for i in range(2, len(trans_msg_history) - 1, 2)]
+
+    else:
+        # Return original chat history
+        msg_chat = [(msg_history[i]["content"], msg_history[i + 1]["content"]) for i in range(2, len(msg_history) - 1, 2)]
+
+    return msg_chat, trans_msg_history, trans_status
 
 def propose_answer(target_language, native_language, msg_history):
     # Proposes an answer to the user
@@ -493,7 +499,7 @@ with gr.Blocks() as app:
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Nivå")
                 with gr.Column():
                     with gr.Row():
-                        setup_target_language_rad = gr.Radio([list(language_dict.keys())[0]], label="Målspråk")
+                        setup_target_language_rad = gr.Radio(list(language_dict.keys())[0:], label="Målspråk")
                         setup_native_language_rad = gr.Radio(list(language_dict.keys())[1:], label="Modersmål")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarion")
 
@@ -550,8 +556,9 @@ with gr.Blocks() as app:
 
     # General
     html = gr.HTML()
-    state = gr.State([])
-    trans_state = gr.State(False)
+    msg_history = gr.State([])
+    trans_msg_history = gr.State([{}, {}])
+    trans_status = gr.State(False)
     speach_duration = gr.Number(0.0, visible=False)
     word_dict = gr.State({
         "nouns": set(),
@@ -562,22 +569,22 @@ with gr.Blocks() as app:
  
 
     # Introduction tab
-    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[html, speach_duration, setup_intr_text, state]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, state], outputs=[chatbot, html, conv_file_path, conv_preview_text, state]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn).then(fn=analyze_words, inputs=[setup_target_language_rad, state, word_dict], outputs=[word_dict]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown])
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn).then(fn=analyze_words, inputs=[setup_target_language_rad, msg_history, word_dict], outputs=[word_dict]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown])
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
-    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, state], outputs=[chatbot, state])
+    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[chatbot, msg_history])
 
     # Help tab
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native,setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
+    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
-    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_state ,state], outputs=[chatbot, trans_state, state])
-    trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=[trans_tb_target, trans_tb_native, html])
+    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
+    trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, state], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict], outputs=[viz_word_dict_markdown])
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict], outputs=[viz_word_dict_markdown])
 if __name__ == "__main__":
     app.launch(ssr_mode=False)
