@@ -121,15 +121,6 @@ setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
 # Dictionary with all languages
 language_dict = {"swedish":["sv", "sv-SV"], "english":["en", "en-EN"], "german":["de", "de-DE"], "french":["fr", "fr-FR"], "spanish":["es", "es-ES"], "portugese(BR)":["pt", "pt-BR"], "hindi":["hi", "hi-IN"]}
 
-# Available spaCy models
-SPACY_MODELS = {
-    "english": "en_core_web_sm",   # English
-    "swedish": "sv_core_news_sm",  # Swedish
-    "german": "de_core_news_sm",  # German
-    "french": "fr_core_news_sm",  # French
-    "spanish": "es_core_news_sm",  # Spanish
-}
-
 #---- init ---- 
 translator = Translator()
 load_dotenv()
@@ -398,144 +389,12 @@ Try to keep your answer **under {max_length - 100} tokens**.
 
     return answere
 
-
-def load_spacy_model(target_language):
-    """Load spaCy model if available for the target language."""
-    model_name = SPACY_MODELS.get(target_language)
-    if model_name:
-        try:
-            return spacy.load(model_name)
-        except OSError:
-            print(f"⚠️ Model {model_name} not found. Falling back to GPT.")
-    return None
-
-
-def analyze_words(target_language, msg_history, word_dict):
-
-    text = msg_history[-2]["content"]
-
-    # Step 1: Try using spaCy
-    nlp = load_spacy_model(target_language)
-    if nlp:
-        doc = nlp(text.lower())  # Process text with spaCy
-
-        # Extract words into categories
-        nouns = {token.lemma_ for token in doc if token.pos_ == "NOUN"}
-        verbs = {token.lemma_ for token in doc if token.pos_ == "VERB"}
-        adjectives = {token.lemma_ for token in doc if token.pos_ == "ADJ"}
-
-        # Update word dictionary
-        word_dict["nouns"].update(nouns)
-        word_dict["verbs"].update(verbs)
-        word_dict["adjectives"].update(adjectives)
-
-        print("Processed using spaCy:", word_dict)
-
-    return word_dict
-
-def viz_word_score(word_dict):
-    """Generates a Markdown table with centered content using HTML styling."""
-       
-    # Centered Table Using HTML
-    table = '<div align="center">\n\n'
-    table += "| **Category**   | **Count** | **Visualization** |\n"
-    table += "|:--------------:|:--------:|:------------------:|\n"  # Center align everything
-    
-    # Categories to process
-    categories = ["nouns", "verbs", "adjectives"]
-    
-    for category in categories:
-        count = len(word_dict.get(category, []))  # Get word count
-        stars = "⭐️" * count if count > 0 else "—"  # Show stars or a dash if empty
-        
-        table += f"| {category.capitalize()} | ~ {count} | {stars} |\n"
-    
-    table += "\n</div>\n"  # Close the HTML div
-    
-    return table
-
-def gpt_word_check(dict, target_language):
-
-    # Convert sets to lists
-    for key, value in dict.items():
-        dict[key] = list(value)
-
-    messages = [
-        {"role": "system", "content": f"You are a linguistics expert verifying word classifications in {target_language}. Given sets of nouns, verbs, and adjectives, some words may be misclassified. Your task is to review and return only correctly categorized words."},
-        {"role": "user", "content": f"These words were auto-classified: {dict}\n Return a cleaned dictionary, keeping only correctly categorized words."},
-    ]
-
-    completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=messages,
-        max_tokens=200,
-        temperature=0
-    )
-
-    return extract_json(completion.choices[0].message.content.strip())
-
-def extract_json(text):
-    text = text.replace("'", '"')  # Replace single quotes with double quotes
-    
-    """Extract JSON from GPT response and ensure it is a dictionary."""
-    match = re.search(r'\{[\s\S]*\}', text)  # Find JSON structure
-    if match:
-        try:
-            extracted_json = json.loads(match.group(0).replace("'", '"'))  # Parse JSON
-            if isinstance(extracted_json, dict):  # Ensure it's a dictionary
-                return extracted_json
-        except json.JSONDecodeError:
-            pass  # Ignore invalid JSON
-    return None
-
-def viz_word_dict(word_dict, target_language):
-    """Visualizes the words used in each category with fun milestone emojis."""
-
-    # Filter words
-    print("Before GPT check:", word_dict)
-    checked_word_dict = gpt_word_check(word_dict, target_language)
-    word_dict = checked_word_dict if checked_word_dict is not None else word_dict
-    print("After GPT check:", word_dict)
-    
-    # Define milestone achievements
-    milestones = {
-        0:  "🌱 Starting out!      ",
-        5:  "🎖️ Growing vocabulary!",
-        10: "🏆 Impressive range!  ",
-        15: "📯 Mastery achieved!  ",
-    }
-
-    # Start Markdown table
-    table = "\n\n## 📊 Word Analysis Overview\n\n"
-    table += "| Category   | Count | Words Used |\n"
-    table += "|------------|-------|------------|\n"
-
-    # Process each category
-    for category in ["nouns", "verbs", "adjectives"]:
-        words = sorted(word_dict.get(category, []))  # Sort words alphabetically for readability
-        count = len(words)  # Get word count
-        
-        # Get milestone emoji (if applicable)
-        milestone_emoji = ""
-        for threshold, emoji in sorted(milestones.items()):
-            if count >= threshold:
-                milestone_emoji = emoji
-        
-        # Convert word list to string or show a dash if empty
-        words_str = ", ".join(words) if words else "—"
-
-        # Add row to table
-        table += f"| {category.capitalize():<10} | {milestone_emoji} -> {count:^5} | {words_str} |\n"
-
-    return table
-  
-
 def delay(seconds):
     sleep(seconds)
     return None
 
 def display_waiting_text():
-    return "### Detta kan ta några sekunder..."
+    return "### This may take a few seconds..."
 
 def remove_emojis(text):
     # Emoji pattern covering most emojis
@@ -639,20 +498,14 @@ with gr.Blocks() as app:
     trans_msg_history = gr.State([{}, {}])
     trans_status = gr.State(False)
     speach_duration = gr.Number(0.0, visible=False)
-    word_dict = gr.State({
-        "nouns": set(),
-        "verbs": set(),
-        "adjectives": set()
-    })
 
- 
 
     # Introduction tab
-    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn).then(fn=analyze_words, inputs=[setup_target_language_rad, msg_history, word_dict], outputs=[word_dict]).then(fn=viz_word_score, inputs=[word_dict], outputs=[word_scor_markdown])
+    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[chatbot, msg_history])
 
@@ -664,7 +517,7 @@ with gr.Blocks() as app:
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown).then(fn=viz_word_dict, inputs=[word_dict, setup_target_language_rad], outputs=[viz_word_dict_markdown])
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown)
 
 if __name__ == "__main__":
     app.launch(ssr_mode=False)
