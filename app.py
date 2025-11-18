@@ -26,7 +26,9 @@ from pydub import AudioSegment
 import yaml
 
 
-GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
+GPT_MODEL_CHAT = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", gpt-5.1-2025-11-13} 
+GPT_MODEL_ANALYSIS = "gpt-5.1-2025-11-13"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", gpt-5.1-2025-11-13} 
+GPT_MODEL_TRANSLATE = "gpt-3.5-turbo"
 
 BEGINNER_DEF = "beginner (easy reader level 1-2)"
 ADVANCED_DEF = "advanced (easy reader level 3-4)"
@@ -74,7 +76,7 @@ def audio2text(file_path,language):
 
 def text2bot(messages, max_length=100):
     start = time()
-    completion = client.chat.completions.create(model=GPT_MODEL, messages=messages, max_tokens=max_length)
+    completion = client.chat.completions.create(model=GPT_MODEL_CHAT, messages=messages, max_completion_tokens=max_length)
     answere = completion.choices[0].message.content
     end = time()
     print(f"Time text2bot: {end-start}")
@@ -112,7 +114,7 @@ def gpt_translate(text, text_language, target_language):
     ]
 
     completion = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=GPT_MODEL_TRANSLATE,
         messages=messages,
         max_tokens=200,
         temperature=0
@@ -245,7 +247,7 @@ def propose_answer(target_language, native_language, msg_history):
     return response_target_lang, response_native_lang, audio_player
 
 # Function to generate chat analysis
-def chat_analysis(target_language, native_language, chat_history, max_length=500):
+def chat_analysis(target_language, native_language, language_level, chat_history, max_length=500):
 
     english_prompt = f"""
 You are an expert in the {target_language} language and a language coach specializing in helping learners improve their {target_language}.
@@ -272,13 +274,12 @@ Because the user is speaking casually and cannot set punctuation or capitalizati
 - **4**: Intermediate: Can hold a natural conversation but makes frequent mistakes while using shorter sentences.
 - **5**: Intermediate Plus: Can hold a natural conversation with frequent mistakes however builds longer sentences and uses diverse, vocabulary.
 
-Be **generous** with this rating. If the user shows little to no grammatical or spelling errors, they should receive the highest rating excellent (6/5).
+The user is on language level {language_level}. If the user shows little to no grammatical or spelling errors, they should receive the highest rating excellent (5/5).
 
 ---
 
 ### **Output Requirements**
 **Write your entire response in {native_language}.**  
-If the conversation has **no mistakes** (apart from disregarded punctuation/capitalization issues), then simply **congratulate** the user with a short message. **Do not** list any mistakes in that case.
 
 Otherwise, for each mistake:
 1. **Highlight the incorrect phrase** using quotation marks.
@@ -317,11 +318,10 @@ Try to keep your answer **under {max_length - 100} tokens**.
 
     messages = [
         {"role": "system", "content": translated_prompt},
-
-        {"role": "user", "content": chat_text},
+        {"role": "system", "content": chat_text},
     ]
 
-    completion = client.chat.completions.create(model=GPT_MODEL, messages=messages, max_tokens=max_length)
+    completion = client.chat.completions.create(model=GPT_MODEL_CHAT, messages=messages, max_completion_tokens=max_length)
     answere = completion.choices[0].message.content
 
     return answere
@@ -383,10 +383,10 @@ with gr.Blocks(theme="soft") as app:
                         setup_native_language_rad = gr.Radio(radio_choices, label="Native Language")
             
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarios")
-            setup_usr_scenario = gr.Textbox(interactive=True, label="User definded scenario")
+            setup_usr_scenario = gr.Textbox(interactive=True, label="User definded scenario", lines=3)
 
             with gr.Row():
-                setup_intr_text = gr.Textbox(interactive=False, label="Introduction")
+                setup_intr_text = gr.Textbox(interactive=False, label="Introduction", lines=3, max_lines=30)
 
             with gr.Row():
                 setup_intr_btn = gr.Button("▶️ Start", variant="primary", interactive=True)
@@ -458,7 +458,7 @@ with gr.Blocks(theme="soft") as app:
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
 
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown)
+    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
 
 if __name__ == "__main__":
     app.launch(ssr_mode=False, debug = True)
