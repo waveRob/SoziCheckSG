@@ -10,7 +10,6 @@ For commercial use or inquiries, please contact: robert.fuellemann@gmail.com
 """
 
 import os
-import json
 import re
 import gradio as gr
 import speech_recognition as sr
@@ -24,7 +23,7 @@ from time import time
 from time import sleep
 from dotenv import load_dotenv
 from pydub import AudioSegment
-import spacy
+import yaml
 
 
 GPT_MODEL = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o"} 
@@ -33,93 +32,26 @@ BEGINNER_DEF = "beginner (easy reader level 1-2)"
 ADVANCED_DEF = "advanced (easy reader level 3-4)"
 
 # --------
-beginner_teacher = f"""You are a language teacher using language level {BEGINNER_DEF.split('(')[1].split(')')[0]}.  
+beginner_teacher = f"""You are a language teacher playing a role paly on language level {BEGINNER_DEF.split('(')[1].split(')')[0]}, your role will be defined later.  
 Respond concisely with short **1 to 2 sentences**.
 Encourage simple conversations, do not ask too many questions.  
 Do not reveal unnecessary information unless the user asks directly.  
 Use **emojis** when appropriate to make the conversation engaging!"""
 
 
-advanced_teacher = f"""You are a language teacher using language level {ADVANCED_DEF.split('(')[1].split(')')[0]}.  
+advanced_teacher = f"""You are a language teacher playing a role paly on language level {BEGINNER_DEF.split('(')[1].split(')')[0]}, your role will be defined later.
 Respond in **2 to 3 sentences**, using more complex sentence structures and vocabulary.  
 Encourage meaningful discussions but do not reveal details unless the user explicitly asks.  
 Use **emojis** when appropriate to make the conversation engaging!"""
 
-scenarios = {
-    "Restaurant Visit: Dining Out": {
-        "context": """  
-        You are visiting a restaurant.  
-        A waiter greets you and asks if you have a reservation.  
-        You will be seated, order drinks, then food.  
-        Later, you may order dessert and ask for the bill.  
-        """,
+teacher_prompt = {BEGINNER_DEF:beginner_teacher, ADVANCED_DEF: advanced_teacher}
 
-        "role": """  
-        You are now **the waiter** at a nice restaurant.  
-        You are friendly and professional, ensuring the customer has a great experience.  
-        
-        Follow this flow in your responses:
-        1. **Greet the customer** and ask if they have a reservation.  
-        2. **Ask how many people** and guide them to a table.  
-        3. **Offer the menu** and ask about drinks first. 🍷🥤  
-        4. **Take the food order**, answer questions about the menu. 🍽️  
-        5. **Check if they want dessert** after the meal. 🍰  
-        6. **Handle payment** and thank them for visiting. 💳  
-
-        Keep responses **short, polite, and realistic**, just like a real waiter would.  
-        If the customer asks questions, answer naturally.  
-        Use **emojis** where appropriate for a friendly tone! 😊🍽️  
-        """
-    },
-        "Talking About Your Last Vacation": {
-        "context": """  
-        You are having a conversation about your last vacation.  
-        Your friend is curious and asks you questions.  
-        Share details about where you went, what you did, and your experiences.  
-        """,
-
-        "role": """  
-        You are now **a curious friend** who loves to hear about travel experiences.  
-        You are interested in details like:  
-        - **Where the trip was** 🌍  
-        - **What activities they did** (sightseeing, food, adventures) 🏕️🍽️  
-        - **Funny or interesting moments** 😆  
-        - **How they felt about the trip** (relaxing, exciting, disappointing)  
-
-        Ask follow-up questions to keep the conversation going.  
-        If they mention a place, react with interest and maybe share a fun fact or similar experience.  
-        Keep your responses **short, natural, and engaging**, like a real conversation with a friend.  
-        Use **emojis** to keep it friendly! 😊✈️  
-        """
-    },
-        "Talking About Weekend Plans": {
-        "context": """  
-        You are chatting with a friend about your weekend plans.  
-        They are curious and ask what you will do.  
-        Share your plans and discuss activities.  
-        """,
-
-        "role": """  
-        You are now **a curious friend** who likes to chat about weekend plans.  
-        You are interested in details like:  
-        - **What they are planning to do** 🎉  
-        - **Who they will spend time with** 👥  
-        - **Where they will go** 🏞️🏙️  
-        - **If they have any special events or celebrations** 🎂🎶  
-
-        Ask follow-up questions to keep the conversation going.  
-        If they have no plans, suggest fun ideas or ask what they feel like doing.  
-        Keep your responses **short, natural, and engaging**, like a real conversation with a friend.  
-        Use **emojis** to make it friendly! 😊📅  
-        """
-    },
-}
-
-setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
-         ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": scenarios}}    
+# Loading Scenarios
+with open("prompts.yaml", "r", encoding="utf-8") as file:
+    scenarios = yaml.safe_load(file)
 
 # Dictionary with all languages
-language_dict = {"swedish":["sv", "sv-SV", "Swedish", "🇸🇪"], "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], " german":["de", "de-DE", "German","🇩🇪"], "french":["fr", "fr-FR", "French", "🇫🇷"], "spanish":["es", "es-ES", "Spanish", "🇪🇸"], "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"], "hindi":["hi", "hi-IN", "Hindi", "🇮🇳"]}
+language_dict = {"swedish":["sv", "sv-SV", "Swedish", "🇸🇪"], "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], "german":["de", "de-DE", "German","🇩🇪"], "french":["fr", "fr-FR", "French", "🇫🇷"], "spanish":["es", "es-ES", "Spanish", "🇪🇸"], "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"], "bengali": ["bn", "bn-IN", "Bengali", "🇧🇩"]}
 
 #---- init ---- 
 translator = Translator()
@@ -194,23 +126,22 @@ def gpt_translate(text, text_language, target_language):
 
 def initialize_scenario(level, selected_scenario, target_language, msg_history):
 
-    teacher_prompt = setup[level]["teacher"]
-    role_prompt    = setup[level]["scenarios"][selected_scenario]["role"]  # Role-play instruction
-    context_prompt = setup[level]["scenarios"][selected_scenario]["context"]  # Only intro context
+    teacher_text = teacher_prompt[level]
+    context_text = scenarios[selected_scenario]["context"]
+    role_text = scenarios[selected_scenario]["role"]
 
-    
     # Sets up the situation and plays the introduction
     msg_history = [
-        {"role": "system", "content": teacher_prompt},
-        {"role": "system", "content": role_prompt},
+        {"role": "system", "content": teacher_text},
+        {"role": "system", "content": role_text},
         ]
     
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
 
-    context_prompt = gpt_translate(context_prompt, "english", target_language)
+    context_text = gpt_translate(context_text, "english", target_language)
 
-    return msg_history, context_prompt
+    return msg_history, context_text
 
 def conv_preview_recording(file_path, target_language):
     if file_path is not None:
@@ -252,15 +183,21 @@ def translator_main(preview_text, native_language, target_language):
     audio_player, _ = text2speach(translated_text, language_dict[target_language][0])
     return translated_text, audio_player
 
-def reset_history(target_language, level, scenario, msg_history):
+def reset_history(target_language, level, selected_scenario, msg_history):
     # Clears the message history and chat
-    new_msg_history, _ = initialize_scenario(level, scenario, target_language, msg_history)
+    new_msg_history, _ = initialize_scenario(level, selected_scenario, target_language, msg_history)
     msg_history = new_msg_history.copy()
     return None, msg_history
 
-def setup_main(target_language, level, scenario, msg_history):
+def setup_main(target_language, level, selected_scenario, def_usr_scenario, msg_history):
+    global scenarios
+
+    # Insert the user defined scenario if selected
+    if selected_scenario == "User Defined Scenario":
+        scenarios["User Defined Scenario"]["role"] = def_usr_scenario
+
     # Initialize the scenario and play the introduction
-    init_msg_history, context_promt = initialize_scenario(level, scenario, target_language, msg_history)
+    init_msg_history, context_promt = initialize_scenario(level, selected_scenario, target_language, msg_history)
     msg_history = init_msg_history.copy()
 
     audio_player, duration = text2speach(context_promt, language_dict[target_language][0])
@@ -369,7 +306,7 @@ Try to keep your answer **under {max_length - 100} tokens**.
 
 
     # Translate the prompt into the target language
-    translated_prompt = translator.translate(english_prompt, dest=native_language).text
+    translated_prompt = translator.translate(english_prompt, dest=language_dict[native_language][0]).text
 
 
     # Remove the first two messages (system messages)
@@ -428,7 +365,7 @@ radio_choices = [
 ]
 
 with gr.Blocks(theme="soft") as app:
-    gr.Image("./loqui/assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False)
+    gr.Image("./assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False)
 
     with gr.Tabs() as tabs:
 
@@ -443,8 +380,10 @@ with gr.Blocks(theme="soft") as app:
                 with gr.Column():
                     with gr.Row():
                         setup_target_language_rad = gr.Radio(radio_choices, label="Target Language")
-                        setup_native_language_rad = gr.Radio(radio_choices, label="Native Language")  
+                        setup_native_language_rad = gr.Radio(radio_choices, label="Native Language")
+            
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarios")
+            setup_usr_scenario = gr.Textbox(interactive=True, label="User definded scenario")
 
             with gr.Row():
                 setup_intr_text = gr.Textbox(interactive=False, label="Introduction")
@@ -503,13 +442,13 @@ with gr.Blocks(theme="soft") as app:
 
 
     # Introduction tab
-    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=True), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
     conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
-    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, msg_history], outputs=[chatbot, msg_history])
+    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[chatbot, msg_history])
 
     # Help tab
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
@@ -522,4 +461,4 @@ with gr.Blocks(theme="soft") as app:
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=analysis_markdown)
 
 if __name__ == "__main__":
-    app.launch(ssr_mode=False)
+    app.launch(ssr_mode=False, debug = True)
