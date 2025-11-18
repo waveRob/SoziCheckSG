@@ -119,7 +119,7 @@ setup = {BEGINNER_DEF: {"teacher": beginner_teacher, "scenarios": scenarios},
          ADVANCED_DEF: {"teacher": advanced_teacher, "scenarios": scenarios}}    
 
 # Dictionary with all languages
-language_dict = {"swedish":["sv", "sv-SV"], "english":["en", "en-EN"], "german":["de", "de-DE"], "french":["fr", "fr-FR"], "spanish":["es", "es-ES"], "portugese(BR)":["pt", "pt-BR"], "hindi":["hi", "hi-IN"]}
+language_dict = {"swedish":["sv", "sv-SV", "Swedish", "🇸🇪"], "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], " german":["de", "de-DE", "German","🇩🇪"], "french":["fr", "fr-FR", "French", "🇫🇷"], "spanish":["es", "es-ES", "Spanish", "🇪🇸"], "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"], "hindi":["hi", "hi-IN", "Hindi", "🇮🇳"]}
 
 #---- init ---- 
 translator = Translator()
@@ -421,13 +421,19 @@ def remove_emojis(text):
 def change_tab(id):
     return gr.Tabs(selected=id)
 
-with gr.Blocks() as app:
-    gr.Markdown("# Loqui")
+# Choices format for radio button
+radio_choices = [
+    (f"{v[3]} {v[2]}", key) 
+    for key, v in language_dict.items()
+]
+
+with gr.Blocks(theme="soft") as app:
+    gr.Image("./loqui/assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False)
 
     with gr.Tabs() as tabs:
 
         # --------------- INTRODUCTION TAB ---------------
-        with gr.TabItem("Start", id=0):
+        with gr.TabItem("▶️ Start", id=0):
             gr.Markdown("### Welcome!")
             gr.Markdown("Loqui is an interactive language learning tool that helps you practice both your active and passive language skills. To get started, select your level, language, and scenario, then confirm by clicking 'Start'.") 
             
@@ -436,60 +442,56 @@ with gr.Blocks() as app:
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], label="Level")
                 with gr.Column():
                     with gr.Row():
-                        setup_target_language_rad = gr.Radio(list(language_dict.keys()), label="Target Language")
-                        setup_native_language_rad = gr.Radio(list(language_dict.keys()), label="Native Language")  
+                        setup_target_language_rad = gr.Radio(radio_choices, label="Target Language")
+                        setup_native_language_rad = gr.Radio(radio_choices, label="Native Language")  
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarios")
 
             with gr.Row():
-                setup_intr_text = gr.Textbox(placeholder="Introduction...", interactive=False)
+                setup_intr_text = gr.Textbox(interactive=False, label="Introduction")
 
             with gr.Row():
-                setup_intr_btn = gr.Button("Start", variant="primary", interactive=True)
+                setup_intr_btn = gr.Button("▶️ Start", variant="primary", interactive=True)
 
         # --------------- CONVERSATION TAB ---------------
-        with gr.TabItem("Conversation", id=1):
-            gr.Markdown("## Conversation")
+        with gr.TabItem("🗣️ Conversation", id=1):
+            gr.Markdown("## 🗣️ Conversation")
             word_scor_markdown = gr.Markdown()
             chatbot = gr.Chatbot()
             with gr.Row():
-                trans_chat_btn = gr.Button("Translate Chat")
+                trans_chat_btn = gr.Button("🌐 Translate Chat")
             with gr.Row():
-                conv_preview_text = gr.Textbox(placeholder="Preview: edit me", interactive=True)
+                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=True, label="Preview")
             with gr.Row():
                 with gr.Column():
-                    conv_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
+                    conv_file_path = gr.Audio(sources="microphone", type="filepath", label="🎙️ Record")
                 with gr.Column():
-                    conv_submit_btn = gr.Button("Submit", elem_id="conv-submit-btn", variant="primary", interactive=False)
+                    conv_submit_btn = gr.Button("🚀 Submit", elem_id="conv-submit-btn", variant="primary", interactive=False)
                 with gr.Column():
-                    conv_clear_btn = gr.Button("Clear")
+                    conv_clear_btn = gr.Button("🗑️ Clear")
 
-            gr.Markdown("## Translation")
-            trans_tb_target = gr.Textbox(placeholder="Target Language", interactive=False)
-            trans_tb_native = gr.Textbox(placeholder="Native Language: edit me", interactive=True)
+            gr.Markdown("## 🎧 Translation")
+            trans_tb_target = gr.Textbox(interactive=False, label="Target Language")
+            trans_tb_native = gr.Textbox(placeholder="edit me", interactive=True, label="Native Language")
 
             with gr.Row():
                 with gr.Column():
-                    trans_file_path = gr.Audio(sources="microphone", type="filepath", label="Record Audio")
+                    trans_file_path = gr.Audio(sources="microphone", type="filepath", label="🎙️Record")
                 with gr.Column():
-                    trans_submit_btn = gr.Button("Translate Audio", variant="primary", interactive=False)
+                    trans_submit_btn = gr.Button("🎧 Translate Audio", variant="primary", interactive=False)
                 with gr.Column():
-                    trans_clear_btn = gr.Button("Clear")
+                    trans_clear_btn = gr.Button("🗑️ Clear")
             with gr.Row():
-                trans_propose_btn = gr.Button("Suggest")
+                trans_propose_btn = gr.Button("💡 Suggest")
 
-            conv_reset_btn = gr.Button("Reset Conversation", variant="stop")
+            conv_reset_btn = gr.Button("🔄 Reset Conversation", variant="stop")
 
         # --------------- ANALYSIS TAB --------------- 
-        with gr.TabItem("Analysis", id=2):
-            gr.Markdown("## Analysis")
+        with gr.TabItem("📊 Analysis", id=2):
+            gr.Markdown("## 📊 Analysis")
 
             analysis_markdown = gr.Markdown()
             viz_word_dict_markdown = gr.Markdown()
             analyze_chat_btn = gr.Button("Generate Analysis", variant="primary", interactive=True)
-
-
-            
-
 
 
     # General
