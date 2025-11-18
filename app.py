@@ -1,11 +1,9 @@
 """
 Language Teacher App
 Copyright (C) 2024 Robert Füllemann
-
 This work is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License.
 You may use this project for personal or educational purposes only.
 For more details about the license, visit: https://creativecommons.org/licenses/by-nc/4.0/
-
 For commercial use or inquiries, please contact: robert.fuellemann@gmail.com
 """
 
@@ -251,55 +249,40 @@ def chat_analysis(target_language, native_language, language_level, chat_history
 
     english_prompt = f"""
 You are an expert in the {target_language} language and a language coach specializing in helping learners improve their {target_language}.
-
 Your task is to analyze a user's spoken (casual) {target_language} conversation, focusing only on:
 - **Grammar** (e.g., incorrect verb conjugation, word gender, possessive pronouns)
 - **Word choice** (e.g., incorrect vocabulary usage)
 - **Word order** (e.g., incorrect sentence structure)
 - **Spelling errors** (e.g., typos or incorrect spellings)
-
 **Ignore** any issues related to:
 - Punctuation (periods, commas, question marks, etc.)
 - Capitalization (upper/lower case usage)
 - Missing sentence separations
-
 Because the user is speaking casually and cannot set punctuation or capitalization, these are **not** considered mistakes for this evaluation.
-
 ---
-
 ### **Language Proficiency Rating (1-5)**
 - **1**: Beginner: No knowledge of the language.
 - **2**: Basic: Can answer simple, but the conversation is fragmented or feels awkward.
 - **3**: Basic Plus: Can hold a simple conversation however using short sentences and alot of mistakes.
 - **4**: Intermediate: Can hold a natural conversation but makes frequent mistakes while using shorter sentences.
 - **5**: Intermediate Plus: Can hold a natural conversation with frequent mistakes however builds longer sentences and uses diverse, vocabulary.
-
 The user is on language level {language_level}. If the user shows little to no grammatical or spelling errors, they should receive the highest rating excellent (5/5).
-
 ---
-
 ### **Output Requirements**
 **Write your entire response in {native_language}.**  
-
 Otherwise, for each mistake:
 1. **Highlight the incorrect phrase** using quotation marks.
 2. **Provide a corrected version** of the phrase.
 3. **Explain why it is incorrect** (e.g., grammatical rule, word choice, word order).
 4. **Summarize common mistakes** made by the user at the end.
-
 ### ❌ Mistake: ...
 ✅ Correction: **...**
 📝 *Mistake:* ...
-
 After listing mistakes (if any), include:
-
 ## 🔍 **Short Overall Observations**
-
 ## 🤓 **Language proficiency**
 Laguage score: x/5
-
 Where x is your generous estimate of the user's language level based on the conversation.
-
 Now, analyze the following chat conversation and provide your response entirely in {native_language}.  
 Keep your answer concise but **detailed** enough to be **informative**.  
 Try to keep your answer **under {max_length - 100} tokens**.
@@ -365,7 +348,7 @@ radio_choices = [
 ]
 
 with gr.Blocks(theme="soft") as app:
-    gr.Image("./assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False)
+    gr.Image("./assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False, show_share_button=False)
 
     with gr.Tabs() as tabs:
 
@@ -461,4 +444,5 @@ with gr.Blocks(theme="soft") as app:
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
 
 if __name__ == "__main__":
-    app.launch(ssr_mode=False, debug = True)
+    app.launch(ssr_mode=False, share=True)
+
