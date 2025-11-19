@@ -181,7 +181,7 @@ def translator_main(preview_text, native_language, target_language):
 
     # Converting bot's text response to speech in German
     audio_player, _ = text2speach(translated_text, language_dict[target_language][0])
-    return translated_text, audio_player
+    return translated_text, None, audio_player
 
 def reset_history(target_language, level, selected_scenario, msg_history):
     # Clears the message history and chat
@@ -377,29 +377,24 @@ with gr.Blocks(theme="soft") as app:
         # --------------- CONVERSATION TAB ---------------
         with gr.TabItem("🗣️ Conversation", id=1):
             gr.Markdown("## 🗣️ Conversation")
-            word_scor_markdown = gr.Markdown()
-            chatbot = gr.Chatbot()
-            with gr.Row():
-                trans_chat_btn = gr.Button("🌐 Translate Chat")
-            with gr.Row():
-                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=True, label="Preview")
+            with gr.Group():
+                chatbot = gr.Chatbot(show_share_button=False)
+                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=False, label="Preview", container=False, lines=2, submit_btn=False)
             with gr.Row():
                 with gr.Column():
                     conv_file_path = gr.Audio(sources="microphone", type="filepath", label="🎙️ Record")
                 with gr.Column():
-                    conv_submit_btn = gr.Button("🚀 Submit", elem_id="conv-submit-btn", variant="primary", interactive=False)
+                    trans_chat_btn = gr.Button("🌐 Translate Chat")
                 with gr.Column():
                     conv_clear_btn = gr.Button("🗑️ Clear")
 
             gr.Markdown("## 🎧 Translation")
-            trans_tb_target = gr.Textbox(interactive=False, label="Target Language")
-            trans_tb_native = gr.Textbox(placeholder="edit me", interactive=True, label="Native Language")
-
+            with gr.Group():
+                trans_tb_target = gr.Textbox(interactive=False, container=False, lines=2, label="Target Language")
+                trans_tb_native = gr.Textbox(placeholder="edit me", interactive=True, container=False, lines=2, label="Native Language", submit_btn=False)
             with gr.Row():
                 with gr.Column():
                     trans_file_path = gr.Audio(sources="microphone", type="filepath", label="🎙️Record")
-                with gr.Column():
-                    trans_submit_btn = gr.Button("🎧 Translate Audio", variant="primary", interactive=False)
                 with gr.Column():
                     trans_clear_btn = gr.Button("🗑️ Clear")
             with gr.Row():
@@ -428,18 +423,19 @@ with gr.Blocks(theme="soft") as app:
     setup_intr_btn.click(lambda: gr.update(interactive=False, visible=True), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
-    conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=conv_submit_btn)
-    conv_submit_btn.click(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_submit_btn)
+    conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=False), inputs=None, outputs=conv_preview_text)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
-    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[chatbot, msg_history])
+    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
 
     # Help tab
-    trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native]).then(fn=lambda: gr.update(interactive=True), inputs=None, outputs=trans_submit_btn)
-    trans_submit_btn.click(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=trans_submit_btn)
+    trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native])
+    trans_tb_native.change(fn=lambda: gr.update(submit_btn=True), inputs=None, outputs=trans_tb_native)
+    trans_tb_native.submit(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, trans_file_path, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False), inputs=None, outputs=trans_tb_native)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
-    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
-
+    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[chatbot, msg_history])
+    
     # Analysis tab
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
 
