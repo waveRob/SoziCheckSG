@@ -8,7 +8,6 @@ For commercial use or inquiries, please contact: robert.fuellemann@gmail.com
 """
 
 import os
-import re
 import gradio as gr
 import speech_recognition as sr
 import copy
@@ -23,26 +22,19 @@ from dotenv import load_dotenv
 from pydub import AudioSegment
 import yaml
 
+from assets.auxiliary_prompts import prompt_beginner_teacher, prompt_advanced_teacher, prompt_analysis
+from assets.auxiliary_functions import remove_emojis
 
-GPT_MODEL_CHAT = "gpt-4o"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", gpt-5.1-2025-11-13} 
-GPT_MODEL_ANALYSIS = "gpt-5.1-2025-11-13"  # {"gpt-3.5-turbo", "gpt-4o-mini", "gpt-4o", gpt-5.1-2025-11-13} 
+GPT_MODEL_CHAT = "gpt-4o"
+GPT_MODEL_ANALYSIS = "gpt-5.1-2025-11-13"
 GPT_MODEL_TRANSLATE = "gpt-3.5-turbo"
 
-BEGINNER_DEF = "beginner (easy reader level 1-2)"
-ADVANCED_DEF = "advanced (easy reader level 3-4)"
+BEGINNER_DEF = "beginner (CEFR level A1)"
+ADVANCED_DEF = "advanced (CEFR level B1)"
 
 # --------
-beginner_teacher = f"""You are a language teacher playing a role paly on language level {BEGINNER_DEF.split('(')[1].split(')')[0]}, your role will be defined later.  
-Respond concisely with short **1 to 2 sentences**.
-Encourage simple conversations, do not ask too many questions.  
-Do not reveal unnecessary information unless the user asks directly.  
-Use **emojis** when appropriate to make the conversation engaging!"""
-
-
-advanced_teacher = f"""You are a language teacher playing a role paly on language level {BEGINNER_DEF.split('(')[1].split(')')[0]}, your role will be defined later.
-Respond in **2 to 3 sentences**, using more complex sentence structures and vocabulary.  
-Encourage meaningful discussions but do not reveal details unless the user explicitly asks.  
-Use **emojis** when appropriate to make the conversation engaging!"""
+beginner_teacher = prompt_beginner_teacher(BEGINNER_DEF)
+advanced_teacher = prompt_advanced_teacher(ADVANCED_DEF)
 
 teacher_prompt = {BEGINNER_DEF:beginner_teacher, ADVANCED_DEF: advanced_teacher}
 
@@ -244,70 +236,39 @@ def propose_answer(target_language, native_language, msg_history):
 
     return response_target_lang, response_native_lang, audio_player
 
-# Function to generate chat analysis
 def chat_analysis(target_language, native_language, language_level, chat_history, max_length=500):
+    # Prompts in English
+    english_prompt_analysis = prompt_analysis(target_language, language_level)
 
-    english_prompt = f"""
-You are an expert in the {target_language} language and a language coach specializing in helping learners improve their {target_language}.
-Your task is to analyze a user's spoken (casual) {target_language} conversation, focusing only on:
-- **Grammar** (e.g., incorrect verb conjugation, word gender, possessive pronouns)
-- **Word choice** (e.g., incorrect vocabulary usage)
-- **Word order** (e.g., incorrect sentence structure)
-- **Spelling errors** (e.g., typos or incorrect spellings)
-**Ignore** any issues related to:
-- Punctuation (periods, commas, question marks, etc.)
-- Capitalization (upper/lower case usage)
-- Missing sentence separations
-Because the user is speaking casually and cannot set punctuation or capitalization, these are **not** considered mistakes for this evaluation.
----
-### **Language Proficiency Rating (1-5)**
-- **1**: Beginner: No knowledge of the language.
-- **2**: Basic: Can answer simple, but the conversation is fragmented or feels awkward.
-- **3**: Basic Plus: Can hold a simple conversation however using short sentences and alot of mistakes.
-- **4**: Intermediate: Can hold a natural conversation but makes frequent mistakes while using shorter sentences.
-- **5**: Intermediate Plus: Can hold a natural conversation with frequent mistakes however builds longer sentences and uses diverse, vocabulary.
-The user is on language level {language_level}. If the user shows little to no grammatical or spelling errors, they should receive the highest rating excellent (5/5).
----
-### **Output Requirements**
-**Write your entire response in {native_language}.**  
-Otherwise, for each mistake:
-1. **Highlight the incorrect phrase** using quotation marks.
-2. **Provide a corrected version** of the phrase.
-3. **Explain why it is incorrect** (e.g., grammatical rule, word choice, word order).
-4. **Summarize common mistakes** made by the user at the end.
-### ❌ Mistake: ...
-✅ Correction: **...**
-📝 *Mistake:* ...
-After listing mistakes (if any), include:
-## 🔍 **Short Overall Observations**
-## 🤓 **Language proficiency**
-Laguage score: x/5
-Where x is your generous estimate of the user's language level based on the conversation.
-Now, analyze the following chat conversation and provide your response entirely in {native_language}.  
-Keep your answer concise but **detailed** enough to be **informative**.  
-Try to keep your answer **under {max_length - 100} tokens**.
-"""
-
-
-    # Translate the prompt into the target language
-    translated_prompt = translator.translate(english_prompt, dest=language_dict[native_language][0]).text
-
+    # Translate prompts into the native language for the system message
+    translated_prompt_analysis = translator.translate(
+        english_prompt_analysis,
+        dest=language_dict[native_language][0]
+    ).text
 
     # Remove the first two messages (system messages)
     chat_only_history = chat_history[2:]
 
-    # Add chat history to the prompt
-    chat_text = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_only_history])
+    # Turn chat into plain text
+    chat_text = "\n".join([
+        f"{msg['role'].capitalize()}: {msg['content']}"
+        for msg in chat_only_history
+    ])
 
-    messages = [
-        {"role": "system", "content": translated_prompt},
-        {"role": "system", "content": chat_text},
+    messages_analysis = [
+        {"role": "system", "content": translated_prompt_analysis},
+        {"role": "user", "content": chat_text},
     ]
 
-    completion = client.chat.completions.create(model=GPT_MODEL_CHAT, messages=messages, max_completion_tokens=max_length)
+    completion = client.chat.completions.create(
+        model=GPT_MODEL_CHAT,
+        messages=messages_analysis,
+        max_completion_tokens=max_length
+    )
     answere = completion.choices[0].message.content
 
     return answere
+
 
 def delay(seconds):
     sleep(seconds)
@@ -315,28 +276,6 @@ def delay(seconds):
 
 def display_waiting_text():
     return "### This may take a few seconds..."
-
-def remove_emojis(text):
-    # Emoji pattern covering most emojis
-    emoji_pattern = re.compile(
-        "["
-        "\U0001F600-\U0001F64F"  # Emoticons
-        "\U0001F300-\U0001F5FF"  # Symbols & Pictographs
-        "\U0001F680-\U0001F6FF"  # Transport & Map Symbols
-        "\U0001F700-\U0001F77F"  # Alchemical Symbols
-        "\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
-        "\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
-        "\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-        "\U0001FA00-\U0001FA6F"  # Chess Symbols
-        "\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
-        "\U00002600-\U000026FF"  # Miscellaneous Symbols (includes weather symbols, hearts, stars, etc.)
-        "\U00002700-\U000027BF"  # Dingbats
-        "\U000024C2-\U0001F251"  # Enclosed characters
-        "]+",
-        flags=re.UNICODE
-    )
-    # Substitute matched emojis with an empty string
-    return emoji_pattern.sub(r'', text)
 
 def change_tab(id):
     return gr.Tabs(selected=id)
@@ -440,5 +379,5 @@ with gr.Blocks(theme="soft") as app:
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
 
 if __name__ == "__main__":
-    app.launch(ssr_mode=False, share=True)
+    app.launch(ssr_mode=False, share=True, debug=True)
 
