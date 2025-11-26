@@ -43,7 +43,16 @@ with open("prompts.yaml", "r", encoding="utf-8") as file:
     scenarios = yaml.safe_load(file)
 
 # Dictionary with all languages
-language_dict = {"swedish":["sv", "sv-SV", "Swedish", "🇸🇪"], "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"], "german":["de", "de-DE", "German","🇩🇪"], "french":["fr", "fr-FR", "French", "🇫🇷"], "spanish":["es", "es-ES", "Spanish", "🇪🇸"], "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"], "bengali": ["bn", "bn-IN", "Bengali", "🇧🇩"]}
+language_dict = {
+    "german":["de", "de-DE", "German","🇩🇪"],
+    "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
+    "french":["fr", "fr-FR", "French", "🇫🇷"],
+    "italian": ["it", "it-IT", "Italian", "🇮🇹"],
+    "spanish":["es", "es-ES", "Spanish", "🇪🇸"],
+    "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"],
+    "swedish":["sv", "sv-SV", "Swedish", "🇸🇪"],
+    "bengali": ["bn", "bn-IN", "Bengali", "🇧🇩"]
+    }
 
 #---- init ---- 
 translator = Translator()
@@ -55,14 +64,19 @@ client = OpenAI(api_key=api_key)
 def audio2text(file_path,language):
     start = time()
     r = sr.Recognizer()
-    # Use the context manager to ensure the file gets closed after processing
-    with sr.AudioFile(file_path) as source:
-        audio = r.record(source) # read the entire audio file
+    try:
+        # Use the context manager to ensure the file gets closed after processing
+        with sr.AudioFile(file_path) as source:
+            audio = r.record(source) # read the entire audio file
 
-    rec_text = r.recognize_google(audio, language=language)
-    end = time()
-    print(f"Time audio2text: {end-start}")
-    return rec_text
+        rec_text = r.recognize_google(audio, language=language)
+        end = time()
+        print(f"Time audio2text: {end-start}")
+        return rec_text
+    except Exception as e:
+        print(f"Unexpected error in audio2text: {e}")
+        return " "
+        
 
 def text2bot(messages, max_length=100):
     start = time()
