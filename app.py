@@ -21,6 +21,8 @@ from time import sleep
 from dotenv import load_dotenv
 from pydub import AudioSegment
 import yaml
+import tempfile
+from datetime import datetime
 
 from assets.auxiliary_prompts import prompt_beginner_teacher, prompt_advanced_teacher, prompt_analysis
 from assets.auxiliary_functions import remove_emojis
@@ -300,6 +302,35 @@ def toggle_user_scenario_interface(scenario):
         return [gr.update(visible=True), gr.update(visible=True)]
     return [gr.update(visible=False), gr.update(visible=False)]
 
+def format_chat_to_text(msg_history):
+    red_msg = msg_history[2:]
+    text = ""
+    for line in red_msg:
+        text += f"{line['role']}: {line['content']}\n"
+    return text
+
+
+def create_analysis_file(msg_history, analysis_text):
+    # Takes the analysis markdown string and writes it to a temp file.
+    # Returns a File update so Gradio shows a downloadable file.
+    if not analysis_text:
+        return gr.update(value=None, visible=False)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    chat_text = format_chat_to_text(msg_history)
+    fd, path = tempfile.mkstemp(suffix=".txt")  # or ".md"
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(f"# 📄 Export Date: {timestamp}\n\n")
+        f.write("────────────────────\n\n")
+        f.write("# 🗣️ Conversation\n\n")
+        f.write(chat_text + "\n")
+        f.write("────────────────────\n\n")
+        f.write("# 📊 Analysis\n\n")
+        f.write(analysis_text)
+
+    # Show the file as downloadable
+    return gr.update(value=path, visible=True)
+
 def load_user_scenario_from_file(file):
     if file is None:
         return ""
@@ -387,7 +418,8 @@ with gr.Blocks(theme="soft") as app:
 
             analysis_markdown = gr.Markdown()
             viz_word_dict_markdown = gr.Markdown()
-            analyze_chat_btn = gr.Button("Generate Analysis", variant="primary", interactive=True)
+            analysis_chat_btn = gr.Button("Generate Analysis", variant="primary", interactive=True)
+            analysis_download_file = gr.File(visible=False, label="⬇️ Download analysis",)
 
 
     # General
@@ -422,7 +454,8 @@ with gr.Blocks(theme="soft") as app:
     conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[chatbot, msg_history])
     
     # Analysis tab
-    analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
+    analysis_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analysis_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown).then(fn=create_analysis_file, inputs=[msg_history, analysis_markdown], outputs=analysis_download_file)
+
 
 if __name__ == "__main__":
     app.launch(ssr_mode=False, share=True, debug=True)
