@@ -294,6 +294,24 @@ def toggle_start_button(level, target_lang, native_lang, scenario):
         return gr.update(interactive=True)
     return gr.update(interactive=False)
 
+def toggle_user_scenario_interface(scenario):
+    # Interfaces are only visible if selected
+    if scenario == "User Defined Scenario":
+        return [gr.update(visible=True), gr.update(visible=True)]
+    return [gr.update(visible=False), gr.update(visible=False)]
+
+def load_user_scenario_from_file(file):
+    if file is None:
+        return ""
+    # Gradio File can be a tempfile or dict-like; handle both
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            content = f.read()
+        return content
+    except Exception as e:
+        print(f"Error reading file: {e}")
+        return "Error reading file"
+    
 def display_waiting_text():
     return "### This may take a few seconds..."
 
@@ -325,7 +343,9 @@ with gr.Blocks(theme="soft") as app:
                         setup_native_language_rad = gr.Radio(radio_choices, label="Native Language")
             
             setup_scenario_rad = gr.Radio(list(scenarios.keys()), label="Scenarios")
-            setup_usr_scenario = gr.Textbox(interactive=True, label="User definded scenario", lines=3)
+            with gr.Row():
+                setup_usr_scenario_text = gr.Textbox(interactive=True, label="User definded scenario", visible=False, lines=8, scale=5)
+                setup_usr_scenario_file = gr.File(visible=False, scale=1, file_types=[".txt"])
 
             with gr.Row():
                 setup_intr_text = gr.Textbox(interactive=False, label="Introduction", lines=3, max_lines=30)
@@ -383,7 +403,9 @@ with gr.Blocks(theme="soft") as app:
     setup_target_language_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
     setup_native_language_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
     setup_scenario_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
-    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=True), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_scenario_rad.change(fn=toggle_user_scenario_interface, inputs=setup_scenario_rad, outputs=[setup_usr_scenario_text, setup_usr_scenario_file])
+    setup_usr_scenario_file.change(fn=load_user_scenario_from_file, inputs=setup_usr_scenario_file, outputs=setup_usr_scenario_text)
+    setup_intr_btn.click(lambda: gr.update(interactive=False, visible=True), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
@@ -397,7 +419,7 @@ with gr.Blocks(theme="soft") as app:
     trans_tb_native.submit(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, trans_file_path, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False), inputs=None, outputs=trans_tb_native)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
     trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
-    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[chatbot, msg_history])
+    conv_reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[chatbot, msg_history])
     
     # Analysis tab
     analyze_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analyze_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown)
