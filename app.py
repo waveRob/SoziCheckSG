@@ -288,6 +288,12 @@ def delay(seconds):
     sleep(seconds)
     return None
 
+def toggle_start_button(level, target_lang, native_lang, scenario):
+    # Button is only clickable if BOTH are selected
+    if level and target_lang and native_lang and scenario:
+        return gr.update(interactive=True)
+    return gr.update(interactive=False)
+
 def display_waiting_text():
     return "### This may take a few seconds..."
 
@@ -325,7 +331,7 @@ with gr.Blocks(theme="soft") as app:
                 setup_intr_text = gr.Textbox(interactive=False, label="Introduction", lines=3, max_lines=30)
 
             with gr.Row():
-                setup_intr_btn = gr.Button("▶️ Start", variant="primary", interactive=True)
+                setup_intr_btn = gr.Button("▶️ Start", variant="primary", interactive=False)
 
         # --------------- CONVERSATION TAB ---------------
         with gr.TabItem("🗣️ Conversation", id=1):
@@ -373,6 +379,10 @@ with gr.Blocks(theme="soft") as app:
 
 
     # Introduction tab
+    setup_level_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
+    setup_target_language_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
+    setup_native_language_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
+    setup_scenario_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
     setup_intr_btn.click(lambda: gr.update(interactive=False, visible=True), inputs=None, outputs=setup_intr_btn).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
