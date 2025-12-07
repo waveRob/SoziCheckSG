@@ -63,7 +63,7 @@ api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key) 
 # --------
 
-def audio2text(file_path,language):
+def audio2text(file_path, language):
     start = time()
     r = sr.Recognizer()
     try:
@@ -160,7 +160,10 @@ def conv_preview_recording(file_path, target_language):
     return rec_text
 
 def trans_preview_recording(file_path, native_language):
-    rec_text = audio2text(file_path, language_dict[native_language][1])
+    if file_path is not None:
+        rec_text = audio2text(file_path, language_dict[native_language][1])
+    else:
+        rec_text = ""
     return rec_text
 
 def main(preview_text, target_language, msg_history):
@@ -446,9 +449,9 @@ with gr.Blocks(theme="soft") as app:
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
     conv_preview_text.submit(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=False), inputs=None, outputs=conv_preview_text)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
-    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
 
     # Help tab
+    trans_chat_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native])
     trans_tb_native.change(fn=lambda: gr.update(submit_btn=True), inputs=None, outputs=trans_tb_native)
     trans_tb_native.submit(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, trans_file_path, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False), inputs=None, outputs=trans_tb_native)
