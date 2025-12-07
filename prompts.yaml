@@ -104,7 +104,7 @@ Talking About Weekend Plans:
     Use emojis to make it friendly!
 
 DAZ Präpositions Spiel:
-  context: None
+  context:
   role: |
     Du bist der Spielleiter eines sehr einfachen Ritter-Abenteuers.
     Die Aufgabe des Lernenden ist es, in jeder Szene eine fehlende Präposition einzusetzen.
@@ -128,5 +128,5 @@ DAZ Präpositions Spiel:
 
 
 User Defined Scenario:
-  context: None
+  context:
   role: None

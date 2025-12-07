@@ -147,7 +147,8 @@ def initialize_scenario(level, selected_scenario, target_language, msg_history):
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
 
-    context_text = gpt_translate(context_text, "english", target_language)
+    if context_text:
+        context_text = gpt_translate(context_text, "english", target_language)
 
     return msg_history, context_text
 
@@ -208,7 +209,10 @@ def setup_main(target_language, level, selected_scenario, def_usr_scenario, msg_
     init_msg_history, context_promt = initialize_scenario(level, selected_scenario, target_language, msg_history)
     msg_history = init_msg_history.copy()
 
-    audio_player, duration = text2speach(context_promt, language_dict[target_language][0])
+    if context_promt:
+        audio_player, duration = text2speach(context_promt, language_dict[target_language][0])
+    else:
+        audio_player, duration = None, 0.0
 
     return audio_player, duration, context_promt, msg_history
 
@@ -309,14 +313,13 @@ def format_chat_to_text(msg_history):
         text += f"{line['role']}: {line['content']}\n"
     return text
 
-
 def create_analysis_file(msg_history, analysis_text):
     # Takes the analysis markdown string and writes it to a temp file.
     # Returns a File update so Gradio shows a downloadable file.
     if not analysis_text:
         return gr.update(value=None, visible=False)
     
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now().strftime("%Y-%m-%d")
     chat_text = format_chat_to_text(msg_history)
     fd, path = tempfile.mkstemp(suffix=".txt")  # or ".md"
     with os.fdopen(fd, "w", encoding="utf-8") as f:
