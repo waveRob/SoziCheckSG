@@ -316,7 +316,7 @@ def format_chat_to_text(msg_history):
         text += f"{line['role']}: {line['content']}\n"
     return text
 
-def create_analysis_file(msg_history, analysis_text):
+def create_analysis_file(scenario, target_language, native_language, msg_history, analysis_text):
     # Takes the analysis markdown string and writes it to a temp file.
     # Returns a File update so Gradio shows a downloadable file.
     if not analysis_text:
@@ -326,7 +326,10 @@ def create_analysis_file(msg_history, analysis_text):
     chat_text = format_chat_to_text(msg_history)
     fd, path = tempfile.mkstemp(suffix=".txt")  # or ".md"
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(f"# 📄 Export Date: {timestamp}\n\n")
+        f.write(f"Scenario: {scenario}\n")
+        f.write(f"Target language: {target_language}\n")
+        f.write(f"Native language: {native_language}\n")
+        f.write(f"Export Date: {timestamp}\n")
         f.write("────────────────────\n\n")
         f.write("# 🗣️ Conversation\n\n")
         f.write(chat_text + "\n")
@@ -460,7 +463,7 @@ with gr.Blocks(theme="soft") as app:
     reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[chatbot, msg_history])
     
     # Analysis tab
-    analysis_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analysis_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown).then(fn=create_analysis_file, inputs=[msg_history, analysis_markdown], outputs=analysis_download_file).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_file_path)
+    analysis_chat_btn.click(lambda: gr.update(interactive=False, visible=False), inputs=None, outputs=analysis_chat_btn).then(fn=display_waiting_text, inputs=None, outputs=analysis_markdown).then(fn=chat_analysis, inputs=[setup_target_language_rad, setup_native_language_rad, setup_level_rad, msg_history], outputs=analysis_markdown).then(fn=create_analysis_file, inputs=[setup_scenario_rad, setup_target_language_rad, setup_native_language_rad, msg_history, analysis_markdown], outputs=analysis_download_file).then(fn=lambda: gr.update(interactive=False), inputs=None, outputs=conv_file_path)
 
 
 if __name__ == "__main__":
