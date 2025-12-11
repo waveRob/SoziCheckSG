@@ -253,9 +253,8 @@ def trans_chat(target_language, native_language, trans_status, trans_msg_history
 
 def propose_answer(target_language, native_language, msg_history):
     # Proposes an answer to the user
-
-    for i in range(2, len(msg_history)-1, 2):
-        switched_msg_history = copy.deepcopy(msg_history)
+    switched_msg_history = copy.deepcopy(msg_history[1:])
+    for i in range(2, len(switched_msg_history)-1, 2):
         switched_msg_history[i]["role"] = 'assistant'
         switched_msg_history[i+1]["role"] = 'user'
 
@@ -460,7 +459,7 @@ with gr.Blocks(theme="soft") as app:
                 with gr.Column():
                     trans_clear_btn = gr.Button("🗑️ Clear", interactive=False)
             with gr.Row():
-                trans_propose_btn = gr.Button("💡 Suggest", interactive=False)
+                trans_propose_btn = gr.Button("💡 Suggest", interactive=False, visible=False)
 
             reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False, visible=False)
 

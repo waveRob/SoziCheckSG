@@ -11,7 +11,7 @@ def prompt_beginner_teacher(teacher_def):
 
 def prompt_advanced_teacher(teacher_def):
     prompt = f"""You are a language teacher playing a role paly on language level {teacher_def.split('(')[1].split(')')[0]}, your role will be defined later.
-    Respond in **2 to 3 sentences**, using more complex sentence structures and vocabulary.  
+    Respond in **1 to 2 sentences**.  
     Encourage meaningful discussions but do not reveal details unless the user explicitly asks.  
     Use **emojis** when appropriate to make the conversation engaging!"""
     return prompt
@@ -81,12 +81,13 @@ def prompt_analysis(target_language, language_level):
     ---
 
     ## 🤓 **Focus for Improving**
-    Give 1–3 clear improvement points, adapted to the learner’s level ({language_level}).
+    If there are marked mistakes, give 1 clear improvement point, adapted to the learner’s level ({language_level}).
     Only mention:
     - grammar
     - word choice
     - word order
     - spelling
+    If there are no marked mistakes write: No improvement points
 
     Do NOT mention punctuation, capitalization, or sentence boundaries.
 
