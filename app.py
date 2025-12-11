@@ -24,15 +24,26 @@ import yaml
 import tempfile
 from datetime import datetime
 
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.lib.enums import TA_LEFT
+
 from assets.auxiliary_prompts import prompt_beginner_teacher, prompt_advanced_teacher, prompt_analysis
 from assets.auxiliary_functions import remove_emojis
 
 GPT_MODEL_CHAT = "gpt-4o"
-GPT_MODEL_ANALYSIS = "gpt-5.1-2025-11-13"
+GPT_MODEL_ANALYSIS = "gpt-4o" # "gpt-5.1-2025-11-13"
 GPT_MODEL_TRANSLATE = "gpt-3.5-turbo"
 
 BEGINNER_DEF = "beginner (CEFR level A1)"
 ADVANCED_DEF = "advanced (CEFR level B1)"
+
+MAX_TOKEN_CHAT = 100
+MAX_TOKEN_ANALYSIS = 200
+
+LOGO_PATH = "./assets/loqui_logo.png"
 
 # --------
 beginner_teacher = prompt_beginner_teacher(BEGINNER_DEF)
@@ -80,7 +91,7 @@ def audio2text(file_path, language):
         return " "
         
 
-def text2bot(messages, max_length=100):
+def text2bot(messages, max_length):
     start = time()
     completion = client.chat.completions.create(model=GPT_MODEL_CHAT, messages=messages, max_completion_tokens=max_length)
     answere = completion.choices[0].message.content
@@ -122,7 +133,7 @@ def gpt_translate(text, text_language, target_language):
     completion = client.chat.completions.create(
         model=GPT_MODEL_TRANSLATE,
         messages=messages,
-        max_tokens=200,
+        max_tokens=MAX_TOKEN_ANALYSIS,
         temperature=0
     )
 
@@ -175,7 +186,7 @@ def main(preview_text, target_language, msg_history):
     msg_history.append({"role": "user", "content":message})
 
     # Generating a response from the bot using the conversation history
-    respons = text2bot(msg_history, max_length=50)
+    respons = text2bot(msg_history, max_length=MAX_TOKEN_CHAT)
     msg_history.append({"role": "assistant", "content":respons})
 
     # Converting bot's text response to audio speech
@@ -249,10 +260,10 @@ def propose_answer(target_language, native_language, msg_history):
         switched_msg_history[i+1]["role"] = 'user'
 
     # Generating a response from the bot using the conversation history
-    response_target_lang = text2bot(switched_msg_history,max_length=100)
+    response_target_lang = text2bot(switched_msg_history, max_length=MAX_TOKEN_CHAT)
 
     # Translating the text
-    response_native_lang = translator.translate(response_target_lang, dest=language_dict[native_language][0]).text
+    response_native_lang = gpt_translate(response_target_lang, target_language, native_language)
 
     # Converting bot's text response to speech
     audio_player, _ = text2speach(response_target_lang,language_dict[target_language][0])
@@ -284,7 +295,7 @@ def chat_analysis(target_language, native_language, language_level, chat_history
     ]
 
     completion = client.chat.completions.create(
-        model=GPT_MODEL_CHAT,
+        model=GPT_MODEL_ANALYSIS,
         messages=messages_analysis,
         max_completion_tokens=max_length
     )
@@ -309,35 +320,67 @@ def toggle_user_scenario_interface(scenario):
         return [gr.update(visible=True), gr.update(visible=True)]
     return [gr.update(visible=False), gr.update(visible=False)]
 
-def format_chat_to_text(msg_history):
-    red_msg = msg_history[2:]
-    text = ""
-    for line in red_msg:
-        text += f"{line['role']}: {line['content']}\n"
-    return text
+def add_header_and_page_number(canvas, doc):
+    canvas.saveState()
+    
+    # Page number (bottom center)
+    page_num = canvas.getPageNumber()
+    canvas.setFont("Helvetica", 9)
+    canvas.drawCentredString(A4[0] / 2, 1 * cm, f"Seite {page_num}")
+    
+    # Header logo (top left)
+    if hasattr(doc, "logo_path") and doc.logo_path and os.path.exists(doc.logo_path):
+        canvas.drawImage(doc.logo_path, 1 * cm, A4[1] - 2.5 * cm, width=40, height=40, preserveAspectRatio=True)
+    
+    # Header line
+    canvas.line(1 * cm, A4[1] - 3 * cm, A4[0] - 1 * cm, A4[1] - 3 * cm)
 
-def create_analysis_file(scenario, target_language, native_language, msg_history, analysis_text):
-    # Takes the analysis markdown string and writes it to a temp file.
-    # Returns a File update so Gradio shows a downloadable file.
+    canvas.restoreState()
+
+
+def create_analysis_file(scenario, target_language, native_language, msg_history, analysis_text, logo_path=LOGO_PATH):
     if not analysis_text:
         return gr.update(value=None, visible=False)
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    chat_text = format_chat_to_text(msg_history)
-    fd, path = tempfile.mkstemp(suffix=".txt")  # or ".md"
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(f"Scenario: {scenario}\n")
-        f.write(f"Target language: {target_language}\n")
-        f.write(f"Native language: {native_language}\n")
-        f.write(f"Export Date: {timestamp}\n")
-        f.write("────────────────────\n\n")
-        f.write("# 🗣️ Conversation\n\n")
-        f.write(chat_text + "\n")
-        f.write("────────────────────\n\n")
-        f.write("# 📊 Analysis\n\n")
-        f.write(analysis_text)
 
-    # Show the file as downloadable
+    # Create temp PDF
+    _, path = tempfile.mkstemp(suffix=".pdf")
+
+    doc = SimpleDocTemplate(path, pagesize=A4,
+                            topMargin=3.5 * cm, bottomMargin=2 * cm,
+                            leftMargin=2 * cm, rightMargin=2 * cm)
+
+    doc.logo_path = logo_path  # store for canvas callback
+
+    styles = getSampleStyleSheet()
+    user_style = ParagraphStyle(name="UserChat",parent=styles["Normal"],alignment=TA_LEFT,fontSize=10,leading=13,spaceAfter=5,leftIndent=0)
+    assistant_style = ParagraphStyle(name="AssistantChat",parent=styles["Normal"],alignment=TA_LEFT,fontSize=10,leading=13,spaceAfter=5,leftIndent=25)
+    flow = []
+    
+    flow.append(Paragraph(f"<b>Szenario:</b> {scenario}", styles['Normal']))
+    flow.append(Paragraph(f"<b>Lernsprache:</b> {target_language}", styles['Normal']))
+    flow.append(Paragraph(f"<b>Muttersprache:</b> {native_language}", styles['Normal']))
+    flow.append(Paragraph(f"<b>Exportdatum:</b> {timestamp}", styles['Normal']))
+    flow.append(Spacer(1, 12))
+
+    flow.append(Paragraph("<b>Unterhaltung</b>", styles['Heading2']))
+    for msg in msg_history[2:]:
+        text = remove_emojis(msg["content"]).replace("\n", "<br/>")
+        if msg["role"] == "user":
+            flow.append(Paragraph(f"<b>Lernende:r:</b> {text}", user_style))
+        else:
+            flow.append(Paragraph(f"<b>Loqui:</b> {text}", assistant_style))
+    flow.append(Spacer(1, 12))
+
+    flow.append(Paragraph("<b>Analyse</b>", styles['Heading2']))
+    flow.append(Paragraph(remove_emojis(analysis_text).replace("\n", "<br/>"), styles['Normal']))
+
+    # Build with custom header/footer for each page
+    doc.build(flow,
+              onFirstPage=add_header_and_page_number,
+              onLaterPages=add_header_and_page_number)
+
     return gr.update(value=path, visible=True)
 
 def load_user_scenario_from_file(file):
@@ -365,7 +408,7 @@ radio_choices = [
 ]
 
 with gr.Blocks(theme="soft") as app:
-    gr.Image("./assets/loqui_logo.png", show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False, show_share_button=False)
+    gr.Image(LOGO_PATH, show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False, show_share_button=False)
 
     with gr.Tabs() as tabs:
 
@@ -419,7 +462,7 @@ with gr.Blocks(theme="soft") as app:
             with gr.Row():
                 trans_propose_btn = gr.Button("💡 Suggest", interactive=False)
 
-            reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False)
+            reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False, visible=False)
 
         # --------------- ANALYSIS TAB --------------- 
         with gr.TabItem("📊 Analysis", id=2):
