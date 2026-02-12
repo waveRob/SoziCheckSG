@@ -12,14 +12,10 @@ import gradio as gr
 import speech_recognition as sr
 import copy
 from openai import OpenAI
-import gtts
-from io import BytesIO
-import base64
 from googletrans import Translator
 from time import time
 from time import sleep
 from dotenv import load_dotenv
-from pydub import AudioSegment
 import yaml
 import tempfile
 from datetime import datetime
@@ -32,6 +28,7 @@ from reportlab.lib.enums import TA_LEFT
 
 from assets.auxiliary_prompts import prompt_beginner_teacher, prompt_advanced_teacher, prompt_analysis
 from assets.auxiliary_functions import remove_emojis
+from assets.auxiliary_classes import TextToSpeechCloud as TextToSpeech
 
 GPT_MODEL_CHAT = "gpt-4o"
 GPT_MODEL_ANALYSIS = "gpt-4o" # "gpt-5.1-2025-11-13"
@@ -58,13 +55,13 @@ with open("prompts.yaml", "r", encoding="utf-8") as file:
 # Dictionary with all languages
 language_dict = {
     "german":["de", "de-DE", "German","🇩🇪"],
-    "english":["en", "en-EN", "English", "🏴󠁧󠁢󠁥󠁮󠁧󠁿"],
+    "english":["en", "en-US", "English", "🇺🇸"],
+    "ukrainian": ["ua", "ua-UA", "Ukrainian", "🇺🇦"],
     "french":["fr", "fr-FR", "French", "🇫🇷"],
     "italian": ["it", "it-IT", "Italian", "🇮🇹"],
     "spanish":["es", "es-ES", "Spanish", "🇪🇸"],
     "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"],
     "swedish":["sv", "sv-SV", "Swedish", "🇸🇪"],
-    "bengali": ["bn", "bn-IN", "Bengali", "🇧🇩"]
     }
 
 #---- init ---- 
@@ -99,30 +96,6 @@ def text2bot(messages, max_length):
     print(f"Time text2bot: {end-start}")
     return answere
 
-def text2speach(rec_text, language):
-    start = time()
-    # Make request to google to get synthesis
-    rec_text_filtered = remove_emojis(rec_text)
-    tts = gtts.gTTS(rec_text_filtered, lang=language)
-
-    audio_bytes = BytesIO()
-    tts.write_to_fp(audio_bytes)
-    audio_bytes.seek(0)
-
-    mp3_data = audio_bytes.getvalue()
-
-    # Convert audio to base64
-    audio = base64.b64encode(mp3_data).decode("utf-8")
-    audio_player = f'<audio src="data:audio/mpeg;base64,{audio}" controls autoplay></audio>'
-    
-    # Get duration using pydub
-    audio_segment = AudioSegment.from_file(BytesIO(mp3_data), format="mp3")
-    duration = audio_segment.duration_seconds  # Duration in seconds
-    print(f"Duration speach: {duration:.2f} seconds")
-    
-    end = time()
-    print(f"Time text2speach: {end-start}")
-    return audio_player, duration
 
 def gpt_translate(text, text_language, target_language):
     messages = [
@@ -177,7 +150,7 @@ def trans_preview_recording(file_path, native_language):
         rec_text = ""
     return rec_text
 
-def main(preview_text, target_language, msg_history):
+def main(preview_text, msg_history):
     # Main function for the chatbot. It takes the preview text and the message history and 
     # returns the chat history, the audio player and the message history
     
@@ -190,7 +163,7 @@ def main(preview_text, target_language, msg_history):
     msg_history.append({"role": "assistant", "content":respons})
 
     # Converting bot's text response to audio speech
-    audio_player, _ = text2speach(respons, language_dict[target_language][0])
+    audio_player, _ = tts.create_audio(respons)
 
     # Creating a list of tuples, each containing a user's message and corresponding bot's response
     msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
@@ -203,7 +176,7 @@ def translator_main(preview_text, native_language, target_language):
     translated_text = gpt_translate(preview_text, native_language, target_language)
 
     # Converting bot's text response to speech in German
-    audio_player, _ = text2speach(translated_text, language_dict[target_language][0])
+    audio_player, _ = tts.create_audio(translated_text)
     return translated_text, None, audio_player
 
 def reset_history(target_language, level, selected_scenario, msg_history):
@@ -213,18 +186,21 @@ def reset_history(target_language, level, selected_scenario, msg_history):
     return None, msg_history
 
 def setup_main(target_language, level, selected_scenario, def_usr_scenario, msg_history):
-    global scenarios
+    global scenarios, tts
 
     # Insert the user defined scenario if selected
     if selected_scenario == "User Defined Scenario":
         scenarios["User Defined Scenario"]["role"] = def_usr_scenario
+
+    # Initialize Text to Speech
+    tts = TextToSpeech(language_dict, target_language)
 
     # Initialize the scenario and play the introduction
     init_msg_history, context_promt = initialize_scenario(level, selected_scenario, target_language, msg_history)
     msg_history = init_msg_history.copy()
 
     if context_promt:
-        audio_player, duration = text2speach(context_promt, language_dict[target_language][0])
+        audio_player, duration = tts.create_audio(context_promt)
     else:
         audio_player, duration = None, 0.0
 
@@ -265,7 +241,7 @@ def propose_answer(target_language, native_language, msg_history):
     response_native_lang = gpt_translate(response_target_lang, target_language, native_language)
 
     # Converting bot's text response to speech
-    audio_player, _ = text2speach(response_target_lang,language_dict[target_language][0])
+    audio_player, _ = tts.create_audio(response_target_lang)
 
     return response_target_lang, response_native_lang, audio_player
 
@@ -492,7 +468,7 @@ with gr.Blocks(theme="soft") as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, setup_target_language_rad, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=False), inputs=None, outputs=conv_preview_text)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=False), inputs=None, outputs=conv_preview_text)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
