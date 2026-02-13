@@ -281,6 +281,48 @@ def chat_analysis(target_language, native_language, language_level, chat_history
     return answere
 
 
+def conversation_concluded(chat_history, max_length=30):
+    """Return True when the Sozialhilfe dialog already reached its final result."""
+    if len(chat_history) <= 2:
+        return False
+
+    chat_text = "\n".join([
+        f"{msg['role'].capitalize()}: {msg['content']}"
+        for msg in chat_history[2:]
+    ])
+
+    messages_analysis = [
+        {
+            "role": "system",
+            "content": (
+                "Be the audit bot for Sozialhilfe Check St. Gallen. "
+                "Answer TRUE only if the assistant already delivered a final outcome: "
+                "(A) 'Ja, wahrscheinlich Anspruch' plus intake hint, (B) 'Möglicherweise Anspruch' "
+                "plus intake hint, (C) 'Nein, das Einkommen ist zu hoch', or an allowed redirect such as "
+                "referring the user to another authority because they live outside St. Gallen or seek "
+                "another service. Reply FALSE whenever the conversation is still collecting data or no "
+                "clear outcome exists. Respond with exactly TRUE or FALSE and nothing else."
+            ),
+        },
+        {"role": "user", "content": chat_text},
+    ]
+
+    completion = client.chat.completions.create(
+        model=GPT_MODEL_ANALYSIS,
+        messages=messages_analysis,
+        max_completion_tokens=max_length,
+        temperature=0
+    )
+
+    answer = completion.choices[0].message.content.strip().lower()
+    return answer.startswith("true")
+
+
+def update_analysis_visibility(chat_history):
+    """Return a UI update that toggles the analysis download visibility."""
+    return gr.update(visible=conversation_concluded(chat_history))
+
+
 def delay(seconds):
     sleep(seconds)
     return None
@@ -423,7 +465,7 @@ with gr.Blocks(theme=theme) as app:
                 conv_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️ Record")
             with gr.Row():
                 conv_clear_btn = gr.Button("🗑️ Clear", interactive=False)
-                conv_chattrans_btn = gr.Button("🌐 Translate Chat", interactive=False,visible=False)
+                conv_chattrans_btn = gr.Button("🌐 Translate Chat", interactive=False, visible=False)
 
             # gr.Markdown("## 🎧 Translation")
             with gr.Group():
@@ -464,7 +506,7 @@ with gr.Blocks(theme=theme) as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text).then(fn=update_analysis_visibility, inputs=msg_history, outputs=analysis_download_file)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
