@@ -44,7 +44,7 @@ class TextToSpeechCloud():
 
         self.tts_conf_state["audo_config"] = texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3,
-            speaking_rate=0.95,
+            speaking_rate=1,
             pitch=1,
         )
         print(

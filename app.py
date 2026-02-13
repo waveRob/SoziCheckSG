@@ -131,8 +131,8 @@ def initialize_scenario(level, selected_scenario, target_language, msg_history):
     msg_history[0]["content"] = translator.translate(msg_history[0]["content"], dest=language_dict[target_language][0]).text
     msg_history[1]["content"] = translator.translate(msg_history[1]["content"], dest=language_dict[target_language][0]).text
 
-    if context_text:
-        context_text = gpt_translate(context_text, "english", target_language)
+    if context_text and target_language != "german":
+        context_text = gpt_translate(context_text, "german", target_language)
 
     return msg_history, context_text
 
@@ -389,18 +389,14 @@ with gr.Blocks(theme="soft") as app:
 
         # --------------- INTRODUCTION TAB ---------------
         with gr.TabItem("▶️ Start", id=0):
-            gr.Markdown("### Welcome!")
-            gr.Markdown("Loqui is an interactive language learning tool that helps you practice both your active and passive language skills. To get started, select your level, language, and scenario, then confirm by clicking 'Start'.") 
+            gr.Markdown("### Willkommen zu Sozialhilfe Check!")
             
             with gr.Row():
-                with gr.Column():
-                    setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], interactive=True, label="Level")
-                with gr.Column():
-                    with gr.Row():
-                        setup_target_language_rad = gr.Radio(radio_choices, interactive=True, label="Target Language")
-                        setup_native_language_rad = gr.Radio(radio_choices, interactive=True, label="Native Language")
+                    setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], interactive=True, label="Level",value="beginner (CEFR level A1)",visible=False)
+                    setup_target_language_rad = gr.Radio(radio_choices, interactive=True, label="Your Language",)
+                    setup_native_language_rad = gr.Radio(radio_choices, interactive=True, label="Native Language", value="english", visible=False) # Remove
             
-            setup_scenario_rad = gr.Radio(list(scenarios.keys()), interactive=True, label="Scenarios")
+            setup_scenario_rad = gr.Radio(list(scenarios.keys()), interactive=True, label="Scenarios", value="Social hilfe check", visible=False)
             with gr.Row():
                 setup_usr_scenario_text = gr.Textbox(visible=False, interactive=True, label="User definded scenario", lines=8, scale=5)
                 setup_usr_scenario_file = gr.File(visible=False, interactive=True, scale=1, file_types=[".txt"])
@@ -418,34 +414,28 @@ with gr.Blocks(theme="soft") as app:
                 chatbot = gr.Chatbot(show_share_button=False)
                 conv_preview_text = gr.Textbox(placeholder="edit me", interactive=False, label="Preview", container=False, lines=2, submit_btn=False)
             with gr.Row():
-                with gr.Column():
-                    conv_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️ Record")
-                with gr.Column():
-                    conv_chattrans_btn = gr.Button("🌐 Translate Chat", interactive=False)
-                with gr.Column():
-                    conv_clear_btn = gr.Button("🗑️ Clear", interactive=False)
+                conv_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️ Record")
+            with gr.Row():
+                conv_clear_btn = gr.Button("🗑️ Clear", interactive=False)
+                conv_chattrans_btn = gr.Button("🌐 Translate Chat", interactive=False,visible=False)
 
-            gr.Markdown("## 🎧 Translation")
+            # gr.Markdown("## 🎧 Translation")
             with gr.Group():
-                trans_tb_target = gr.Textbox(interactive=False, container=False, lines=2, label="Target Language")
-                trans_tb_native = gr.Textbox(placeholder="edit me", interactive=True, container=False, lines=2, label="Native Language", submit_btn=False)
+                trans_tb_target = gr.Textbox(interactive=False, container=False, lines=2, label="Target Language", visible=False)
+                trans_tb_native = gr.Textbox(placeholder="edit me", interactive=True, container=False, lines=2, label="Native Language", submit_btn=False, visible=False)
             with gr.Row():
-                with gr.Column():
-                    trans_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️Record")
-                with gr.Column():
-                    trans_clear_btn = gr.Button("🗑️ Clear", interactive=False)
-            with gr.Row():
-                trans_propose_btn = gr.Button("💡 Suggest", interactive=False, visible=False)
+                trans_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️Record", visible=False)
+                trans_clear_btn = gr.Button("🗑️ Clear", interactive=False, visible=False)
+                trans_propose_btn = gr.Button("💡 Suggest", interactive=False, visible=False,)
 
-            reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False, visible=False)
+            reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False, visible=False,)
 
         # --------------- ANALYSIS TAB --------------- 
-        with gr.TabItem("📊 Analysis", id=2):
-            gr.Markdown("## 📊 Analysis")
-
+        with gr.TabItem("⚖️ Resultat", id=2):
+            gr.Markdown("## ⚖️ Resultat")
             analysis_markdown = gr.Markdown()
             viz_word_dict_markdown = gr.Markdown()
-            analysis_chat_btn = gr.Button("Generate Analysis", variant="primary", interactive=False)
+            analysis_chat_btn = gr.Button("Generiere Sozialhilfe Check", variant="primary", interactive=False)
             analysis_download_file = gr.File(visible=False, label="⬇️ Download analysis",)
 
 
