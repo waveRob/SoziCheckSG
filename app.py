@@ -383,9 +383,12 @@ radio_choices = [
     (f"{v[3]} {v[2]}", key) 
     for key, v in language_dict.items()
 ]
+theme = gr.themes.Soft(
+    primary_hue="gray",
+    secondary_hue="red",
+)
 
-
-with gr.Blocks(theme="soft") as app:
+with gr.Blocks(theme=theme) as app:
     gr.Image(LOGO_PATH, show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False, show_share_button=False)
 
     with gr.Tabs() as tabs:
