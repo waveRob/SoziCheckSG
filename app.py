@@ -318,11 +318,6 @@ def conversation_concluded(chat_history, max_length=30):
     return answer.startswith("true")
 
 
-def update_analysis_visibility(chat_history):
-    """Return a UI update that toggles the analysis download visibility."""
-    return gr.update(visible=conversation_concluded(chat_history))
-
-
 def delay(seconds):
     sleep(seconds)
     return None
@@ -349,17 +344,16 @@ def add_header_and_page_number(canvas, doc):
     
     # Header logo (top left)
     if hasattr(doc, "logo_path") and doc.logo_path and os.path.exists(doc.logo_path):
-        canvas.drawImage(doc.logo_path, 1 * cm, A4[1] - 2.5 * cm, width=40, height=40, preserveAspectRatio=True)
+        canvas.drawImage( doc.logo_path, 1 * cm, A4[1] - 3 * cm, width=3 * cm, height=3 * cm, preserveAspectRatio=True, mask="auto")
+
     
     # Header line
-    canvas.line(1 * cm, A4[1] - 3 * cm, A4[0] - 1 * cm, A4[1] - 3 * cm)
+    canvas.line(1 * cm, A4[1] - 3.2 * cm, A4[0] - 1 * cm, A4[1] - 3.2 * cm)
 
     canvas.restoreState()
 
 
-def create_analysis_file(scenario, target_language, native_language, msg_history, analysis_text, logo_path=LOGO_PATH):
-    if not analysis_text:
-        return gr.update(value=None, visible=False)
+def create_analysis_file(msg_history, target_language, logo_path=LOGO_PATH):
     
     timestamp = datetime.now().strftime("%Y-%m-%d")
 
@@ -376,31 +370,35 @@ def create_analysis_file(scenario, target_language, native_language, msg_history
     user_style = ParagraphStyle(name="UserChat",parent=styles["Normal"],alignment=TA_LEFT,fontSize=10,leading=13,spaceAfter=5,leftIndent=0)
     assistant_style = ParagraphStyle(name="AssistantChat",parent=styles["Normal"],alignment=TA_LEFT,fontSize=10,leading=13,spaceAfter=5,leftIndent=25)
     flow = []
-    
-    flow.append(Paragraph(f"<b>Szenario:</b> {scenario}", styles['Normal']))
-    flow.append(Paragraph(f"<b>Lernsprache:</b> {target_language}", styles['Normal']))
-    flow.append(Paragraph(f"<b>Muttersprache:</b> {native_language}", styles['Normal']))
+
     flow.append(Paragraph(f"<b>Exportdatum:</b> {timestamp}", styles['Normal']))
     flow.append(Spacer(1, 12))
 
-    flow.append(Paragraph("<b>Unterhaltung</b>", styles['Heading2']))
+    flow.append(Paragraph("<b>Sozialhilfe-Check St.Gallen</b>", styles['Heading2']))
     for msg in msg_history[2:]:
         text = remove_emojis(msg["content"]).replace("\n", "<br/>")
+        if target_language != "german":
+            text = gpt_translate(text, target_language, "german")
         if msg["role"] == "user":
-            flow.append(Paragraph(f"<b>Lernende:r:</b> {text}", user_style))
+            flow.append(Paragraph(f"<b>Beantragende:r:</b> {text}", user_style))
         else:
-            flow.append(Paragraph(f"<b>Loqui:</b> {text}", assistant_style))
+            flow.append(Paragraph(f"<b>Sozi-Bot:</b> {text}", assistant_style))
     flow.append(Spacer(1, 12))
-
-    flow.append(Paragraph("<b>Analyse</b>", styles['Heading2']))
-    flow.append(Paragraph(remove_emojis(analysis_text).replace("\n", "<br/>"), styles['Normal']))
 
     # Build with custom header/footer for each page
     doc.build(flow,
               onFirstPage=add_header_and_page_number,
               onLaterPages=add_header_and_page_number)
 
-    return gr.update(value=path, visible=True)
+    return path
+
+def update_analysis_visibility(chat_history, target_language):
+    """Return a UI update that toggles the analysis download visibility."""
+    if conversation_concluded(chat_history):
+        path = create_analysis_file(chat_history, target_language, logo_path=LOGO_PATH)
+        return gr.update(value=path, visible=True)
+    else:
+        return gr.update(visible=False)
 
 def load_user_scenario_from_file(file):
     if file is None:
@@ -460,7 +458,7 @@ with gr.Blocks(theme=theme) as app:
             gr.Markdown("## 🗣️ Conversation")
             with gr.Group():
                 chatbot = gr.Chatbot(show_share_button=False)
-                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=False, label="Preview", container=False, lines=2, submit_btn=True)
+                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=True, label="Preview", container=False, lines=2, submit_btn=True)
             with gr.Row():
                 conv_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️ Record")
             with gr.Row():
@@ -506,7 +504,7 @@ with gr.Blocks(theme=theme) as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text).then(fn=update_analysis_visibility, inputs=msg_history, outputs=analysis_download_file)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=update_analysis_visibility, inputs=[msg_history, setup_target_language_rad], outputs=analysis_download_file)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
