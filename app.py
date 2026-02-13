@@ -40,7 +40,7 @@ ADVANCED_DEF = "advanced (CEFR level B1)"
 MAX_TOKEN_CHAT = 100
 MAX_TOKEN_ANALYSIS = 200
 
-LOGO_PATH = "./assets/loqui_logo.png"
+LOGO_PATH = "./assets/logo_stgallen.png"
 
 # --------
 beginner_teacher = prompt_beginner_teacher(BEGINNER_DEF)
