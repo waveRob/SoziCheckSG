@@ -412,7 +412,7 @@ with gr.Blocks(theme="soft") as app:
             gr.Markdown("## 🗣️ Conversation")
             with gr.Group():
                 chatbot = gr.Chatbot(show_share_button=False)
-                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=False, label="Preview", container=False, lines=2, submit_btn=False)
+                conv_preview_text = gr.Textbox(placeholder="edit me", interactive=False, label="Preview", container=False, lines=2, submit_btn=True)
             with gr.Row():
                 conv_file_path = gr.Audio(sources="microphone", interactive=False, type="filepath", label="🎙️ Record")
             with gr.Row():
@@ -431,12 +431,12 @@ with gr.Blocks(theme="soft") as app:
             reset_btn = gr.Button("🔄 Reset Conversation", variant="stop", interactive=False, visible=False,)
 
         # --------------- ANALYSIS TAB --------------- 
-        with gr.TabItem("⚖️ Resultat", id=2):
-            gr.Markdown("## ⚖️ Resultat")
+        # with gr.TabItem("⚖️ Resultat", id=2):
+        #     gr.Markdown("## ⚖️ Resultat")
             analysis_markdown = gr.Markdown()
             viz_word_dict_markdown = gr.Markdown()
-            analysis_chat_btn = gr.Button("Generiere Sozialhilfe Check", variant="primary", interactive=False)
-            analysis_download_file = gr.File(visible=False, label="⬇️ Download analysis",)
+            analysis_chat_btn = gr.Button("Generiere Sozialhilfe Check", variant="primary", interactive=False, visible=False)
+            analysis_download_file = gr.File(visible=False, label="⬇️ Download analysis")
 
 
     # General
@@ -458,7 +458,7 @@ with gr.Blocks(theme="soft") as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=False), inputs=None, outputs=conv_preview_text)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=True), inputs=None, outputs=conv_preview_text)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
