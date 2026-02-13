@@ -53,16 +53,18 @@ with open("prompts.yaml", "r", encoding="utf-8") as file:
     scenarios = yaml.safe_load(file)
 
 # Dictionary with all languages
-language_dict = {
-    "german":["de", "de-DE", "German","🇩🇪"],
-    "english":["en", "en-US", "English", "🇺🇸"],
-    "ukrainian": ["ua", "ua-UA", "Ukrainian", "🇺🇦"],
-    "french":["fr", "fr-FR", "French", "🇫🇷"],
-    "italian": ["it", "it-IT", "Italian", "🇮🇹"],
-    "spanish":["es", "es-ES", "Spanish", "🇪🇸"],
-    "portugese(BR)":["pt", "pt-BR", "Portugese", "🇧🇷"],
-    "swedish":["sv", "sv-SV", "Swedish", "🇸🇪"],
-    }
+language_dict = { 
+    "italian": ["it", "it-IT", "Italian", "🇮🇹"], 
+    "german": ["de", "de-DE", "German", "🇩🇪"], 
+    "english":["en", "en-US", "English", "🇺🇸"], 
+    "portuguese": ["pt", "pt-PT", "Portuguese", "🇵🇹"], 
+    "french": ["fr", "fr-FR", "French", "🇫🇷"], 
+    "albanian": ["sq", "sq-AL", "Albanian", "🇽🇰"], 
+    "spanish": ["es", "es-ES", "Spanish", "🇪🇸"], 
+    "turkish": ["tr", "tr-TR", "Turkish", "🇹🇷"], 
+    "macedonian": ["mk", "mk-MK", "Macedonian", "🇲🇰"], 
+    "ukrainian": ["uk", "uk-UA", "Ukrainian", "🇺🇦"]
+}
 
 #---- init ---- 
 translator = Translator()
@@ -382,6 +384,7 @@ radio_choices = [
     for key, v in language_dict.items()
 ]
 
+
 with gr.Blocks(theme="soft") as app:
     gr.Image(LOGO_PATH, show_label=False, container=False, width=10, show_download_button=False, show_fullscreen_button=False, show_share_button=False)
 
@@ -458,7 +461,7 @@ with gr.Blocks(theme="soft") as app:
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False, interactive=True), inputs=None, outputs=conv_preview_text)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
