@@ -152,7 +152,7 @@ def trans_preview_recording(file_path, native_language):
         rec_text = ""
     return rec_text
 
-def main(preview_text, msg_history):
+def main(preview_text, msg_history, tts_instance):
     # Main function for the chatbot. It takes the preview text and the message history and 
     # returns the chat history, the audio player and the message history
     
@@ -165,20 +165,28 @@ def main(preview_text, msg_history):
     msg_history.append({"role": "assistant", "content":respons})
 
     # Converting bot's text response to audio speech
-    audio_player, _ = tts.create_audio(respons)
+    audio_player = None
+    if tts_instance is not None:
+        audio_player, _ = tts_instance.create_audio(respons)
+    else:
+        print("Warning: TextToSpeech instance not initialized before calling main().")
 
     # Creating a list of tuples, each containing a user's message and corresponding bot's response
     msg_chat = [(msg_history[i]["content"], msg_history[i+1]["content"]) for i in range(2, len(msg_history)-1, 2)]
     return msg_chat, audio_player, None, None, msg_history
 
-def translator_main(preview_text, native_language, target_language):
+def translator_main(preview_text, native_language, target_language, tts_instance):
     # Translates the preview text to the target language and returns the translated text and the audio
 
     # Translating the preview text
     translated_text = gpt_translate(preview_text, native_language, target_language)
 
     # Converting bot's text response to speech in German
-    audio_player, _ = tts.create_audio(translated_text)
+    audio_player = None
+    if tts_instance is not None:
+        audio_player, _ = tts_instance.create_audio(translated_text)
+    else:
+        print("Warning: TextToSpeech instance not initialized before calling translator_main().")
     return translated_text, None, audio_player
 
 def reset_history(target_language, level, selected_scenario, msg_history):
@@ -188,25 +196,25 @@ def reset_history(target_language, level, selected_scenario, msg_history):
     return None, msg_history
 
 def setup_main(target_language, level, selected_scenario, def_usr_scenario, msg_history):
-    global scenarios, tts
+    global scenarios
 
     # Insert the user defined scenario if selected
     if selected_scenario == "User Defined Scenario":
         scenarios["User Defined Scenario"]["role"] = def_usr_scenario
 
     # Initialize Text to Speech
-    tts = TextToSpeech(language_dict, target_language)
+    tts_instance = TextToSpeech(language_dict, target_language)
 
     # Initialize the scenario and play the introduction
     init_msg_history, context_promt = initialize_scenario(level, selected_scenario, target_language, msg_history)
     msg_history = init_msg_history.copy()
 
     if context_promt:
-        audio_player, duration = tts.create_audio(context_promt)
+        audio_player, duration = tts_instance.create_audio(context_promt)
     else:
         audio_player, duration = None, 0.0
 
-    return audio_player, duration, context_promt, msg_history
+    return audio_player, duration, context_promt, msg_history, tts_instance
 
 def trans_chat(target_language, native_language, trans_status, trans_msg_history, msg_history):
 
@@ -229,7 +237,7 @@ def trans_chat(target_language, native_language, trans_status, trans_msg_history
 
     return msg_chat, trans_msg_history, trans_status
 
-def propose_answer(target_language, native_language, msg_history):
+def propose_answer(target_language, native_language, msg_history, tts_instance):
     # Proposes an answer to the user
     switched_msg_history = copy.deepcopy(msg_history[1:])
     for i in range(2, len(switched_msg_history)-1, 2):
@@ -243,7 +251,11 @@ def propose_answer(target_language, native_language, msg_history):
     response_native_lang = gpt_translate(response_target_lang, target_language, native_language)
 
     # Converting bot's text response to speech
-    audio_player, _ = tts.create_audio(response_target_lang)
+    audio_player = None
+    if tts_instance is not None:
+        audio_player, _ = tts_instance.create_audio(response_target_lang)
+    else:
+        print("Warning: TextToSpeech instance not initialized before calling propose_answer().")
 
     return response_target_lang, response_native_lang, audio_player
 
@@ -488,6 +500,7 @@ with gr.Blocks(theme=theme) as app:
     # General
     html = gr.HTML()
     msg_history = gr.State([])
+    tts_state = gr.State(None)
     trans_msg_history = gr.State([{}, {}])
     trans_status = gr.State(False)
     speach_duration = gr.Number(0.0, visible=False)
@@ -500,20 +513,20 @@ with gr.Blocks(theme=theme) as app:
     setup_scenario_rad.change(fn=toggle_start_button, inputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad], outputs=setup_intr_btn)
     setup_scenario_rad.change(fn=toggle_user_scenario_interface, inputs=setup_scenario_rad, outputs=[setup_usr_scenario_text, setup_usr_scenario_file])
     setup_usr_scenario_file.change(fn=load_user_scenario_from_file, inputs=setup_usr_scenario_file, outputs=setup_usr_scenario_text)
-    setup_intr_btn.click(lambda: gr.update(visible=False), inputs=None, outputs=setup_intr_btn).then(lambda: [gr.update(interactive=False)]*6, inputs=None, outputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad, setup_usr_scenario_text, setup_usr_scenario_file]).then(fn=lambda: [gr.update(interactive=True)]*8, inputs=None, outputs=[conv_file_path, conv_chattrans_btn, conv_clear_btn, trans_file_path, trans_clear_btn, trans_propose_btn, reset_btn, analysis_chat_btn]).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
+    setup_intr_btn.click(lambda: gr.update(visible=False), inputs=None, outputs=setup_intr_btn).then(lambda: [gr.update(interactive=False)]*6, inputs=None, outputs=[setup_level_rad, setup_target_language_rad, setup_native_language_rad, setup_scenario_rad, setup_usr_scenario_text, setup_usr_scenario_file]).then(fn=lambda: [gr.update(interactive=True)]*8, inputs=None, outputs=[conv_file_path, conv_chattrans_btn, conv_clear_btn, trans_file_path, trans_clear_btn, trans_propose_btn, reset_btn, analysis_chat_btn]).then(fn=setup_main, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[html, speach_duration, setup_intr_text, msg_history, tts_state]).then(fn=delay, inputs=speach_duration, outputs=None).then(change_tab, gr.Number(1, visible=False), tabs)
     
     # Conversation tab
     conv_file_path.change(fn=conv_preview_recording, inputs=[conv_file_path, setup_target_language_rad], outputs=[conv_preview_text]).then(fn=lambda: gr.update(submit_btn=True, interactive=True), inputs=None, outputs=conv_preview_text)
-    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=update_analysis_visibility, inputs=[msg_history, setup_target_language_rad], outputs=analysis_download_file)
+    conv_preview_text.submit(fn=main, inputs=[conv_preview_text, msg_history, tts_state], outputs=[chatbot, html, conv_file_path, conv_preview_text, msg_history]).then(fn=update_analysis_visibility, inputs=[msg_history, setup_target_language_rad], outputs=analysis_download_file)
     conv_clear_btn.click(lambda : [None, None], inputs=None, outputs=[conv_file_path, conv_preview_text])
 
     # Help tab
     conv_chattrans_btn.click(fn=trans_chat, inputs=[setup_target_language_rad ,setup_native_language_rad, trans_status, trans_msg_history ,msg_history], outputs=[chatbot, trans_msg_history, trans_status])
     trans_file_path.change(fn=trans_preview_recording, inputs=[trans_file_path, setup_native_language_rad], outputs=[trans_tb_native])
     trans_tb_native.change(fn=lambda: gr.update(submit_btn=True), inputs=None, outputs=trans_tb_native)
-    trans_tb_native.submit(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad], outputs=[trans_tb_target, trans_file_path, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False), inputs=None, outputs=trans_tb_native)
+    trans_tb_native.submit(fn=translator_main, inputs=[trans_tb_native, setup_native_language_rad, setup_target_language_rad, tts_state], outputs=[trans_tb_target, trans_file_path, html]).then(fn=delay, inputs=gr.Number(0.5, visible=False), outputs=None).then(fn=lambda: gr.update(submit_btn=False), inputs=None, outputs=trans_tb_native)
     trans_clear_btn.click(lambda : [None, None, None], None, [trans_file_path, trans_tb_native, trans_tb_target])
-    trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history], outputs=[trans_tb_target, trans_tb_native, html])
+    trans_propose_btn.click(fn= propose_answer,inputs=[setup_target_language_rad, setup_native_language_rad, msg_history, tts_state], outputs=[trans_tb_target, trans_tb_native, html])
     reset_btn.click(fn=reset_history, inputs=[setup_target_language_rad, setup_level_rad, setup_scenario_rad, setup_usr_scenario_text, msg_history], outputs=[chatbot, msg_history])
     
     # Analysis tab
