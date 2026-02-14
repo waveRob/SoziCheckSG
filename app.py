@@ -56,14 +56,14 @@ with open("prompts.yaml", "r", encoding="utf-8") as file:
 language_dict = { 
     "italian": ["it", "it-IT", "Italian", "🇮🇹"], 
     "german": ["de", "de-DE", "German", "🇩🇪"], 
-    "english":["en", "en-US", "English", "🇺🇸"], 
     "portuguese": ["pt", "pt-PT", "Portuguese", "🇵🇹"], 
     "french": ["fr", "fr-FR", "French", "🇫🇷"], 
     "albanian": ["sq", "sq-AL", "Albanian", "🇽🇰"], 
     "spanish": ["es", "es-ES", "Spanish", "🇪🇸"], 
     "turkish": ["tr", "tr-TR", "Turkish", "🇹🇷"], 
     "macedonian": ["mk", "mk-MK", "Macedonian", "🇲🇰"], 
-    "ukrainian": ["uk", "uk-UA", "Ukrainian", "🇺🇦"]
+    "ukrainian": ["uk", "uk-UA", "Ukrainian", "🇺🇦"],
+    "english":["en", "en-US", "English", "🇺🇸"], 
 }
 
 #---- init ---- 
@@ -438,6 +438,7 @@ radio_choices = [
 theme = gr.themes.Soft(
     primary_hue="gray",
     secondary_hue="red",
+    font=["Helvetica", "system-ui", "sans-serif"],
 )
 
 with gr.Blocks(theme=theme) as app:
@@ -447,7 +448,7 @@ with gr.Blocks(theme=theme) as app:
 
         # --------------- INTRODUCTION TAB ---------------
         with gr.TabItem("▶️ Start", id=0):
-            gr.Markdown("### Willkommen zu Sozialhilfe Check!")
+            gr.Markdown("### Willkommen zum Sozialhilfe-Check!")
             
             with gr.Row():
                     setup_level_rad = gr.Radio([BEGINNER_DEF, ADVANCED_DEF], interactive=True, label="Level",value="beginner (CEFR level A1)",visible=False)
@@ -466,8 +467,7 @@ with gr.Blocks(theme=theme) as app:
                 setup_intr_btn = gr.Button("▶️ Start", variant="primary", interactive=False)
 
         # --------------- CONVERSATION TAB ---------------
-        with gr.TabItem("🗣️ Conversation", id=1):
-            gr.Markdown("## 🗣️ Conversation")
+        with gr.TabItem("🗣️ Sozialhilfe-Check", id=1):
             with gr.Group():
                 chatbot = gr.Chatbot(show_share_button=False)
                 conv_preview_text = gr.Textbox(placeholder="edit me", interactive=True, label="Preview", container=False, lines=2, submit_btn=True)

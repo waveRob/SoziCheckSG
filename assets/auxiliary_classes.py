@@ -34,7 +34,7 @@ class TextToSpeechCloud():
         filtered_voices = [
             voice
             for voice in voices
-            if self.lang_code in voice.language_codes and "WAVENET" in voice.name.upper()
+            if self.lang_code in voice.language_codes and "STUDIO" in voice.name.upper()  # Premium voice: "STUDIO"
         ]  # Filter for standard voices
         selected_voice = random.choice(filtered_voices)
 
