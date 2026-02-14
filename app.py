@@ -364,6 +364,39 @@ def add_header_and_page_number(canvas, doc):
 
     canvas.restoreState()
 
+def create_summary(chat_history):
+    chat_text = "\n".join([
+        f"{msg['role'].capitalize()}: {msg['content']}"
+        for msg in chat_history[2:]
+    ])
+
+    messages_summary = [
+        {
+            "role": "system",
+            "content": (
+                "Du erstellst eine extrem kurze Sachübersicht für eine Behörde. "
+                "Arbeite ausschließlich mit klaren Fakten aus dem Gespräch. "
+                "Keine Erklärungen. Keine Höflichkeitsformeln. "
+                "Keine Interpretation. "
+                "Kein Bezug auf Gesprächsverlauf. "
+                "Maximal eine sehr kurze Aussage oder wenige Stichpunkte."
+            )
+        },
+        {
+            "role": "user",
+            "content": chat_text
+        },
+    ]
+
+    completion = client.chat.completions.create(
+        model=GPT_MODEL_ANALYSIS,
+        messages=messages_summary,
+        max_completion_tokens=200,
+        temperature=0.2
+    )
+
+    return completion.choices[0].message.content.strip()
+
 
 def create_analysis_file(msg_history, target_language, logo_path=LOGO_PATH):
     
@@ -387,6 +420,19 @@ def create_analysis_file(msg_history, target_language, logo_path=LOGO_PATH):
     flow.append(Spacer(1, 12))
 
     flow.append(Paragraph("<b>Sozialhilfe-Check St.Gallen</b>", styles['Heading2']))
+    flow.append(Spacer(1, 12))
+
+    flow.append(Paragraph("<b>DEUTSCH</b>", styles['Heading3']))
+    flow.append(Paragraph("<b>Übersicht:</b>"))
+    flow.append(Spacer(1, 8))
+    summary = create_summary(msg_history)
+    for line in summary.split("\n"):
+        if line.strip():
+            flow.append(Paragraph(line.strip(), styles["Normal"]))
+            flow.append(Spacer(1, 4))
+
+    flow.append(Spacer(1, 12))
+    flow.append(Spacer(1, 12))
     for msg in msg_history[2:]:
         text = remove_emojis(msg["content"]).replace("\n", "<br/>")
         if target_language != "german":
@@ -396,6 +442,15 @@ def create_analysis_file(msg_history, target_language, logo_path=LOGO_PATH):
         else:
             flow.append(Paragraph(f"<b>Sozi-Bot:</b> {text}", assistant_style))
     flow.append(Spacer(1, 12))
+    if target_language != 'german':
+        flow.append(Paragraph(f"<b>{target_language.capitalize()}</b>", styles['Heading3']))
+        for msg in msg_history[2:]:
+            text = remove_emojis(msg["content"]).replace("\n", "<br/>")
+            if msg["role"] == "user":
+                flow.append(Paragraph(f"<b>Beantragende:r:</b> {text}", user_style))
+            else:
+                flow.append(Paragraph(f"<b>Sozi-Bot:</b> {text}", assistant_style))
+        flow.append(Spacer(1, 12))
 
     # Build with custom header/footer for each page
     doc.build(flow,
