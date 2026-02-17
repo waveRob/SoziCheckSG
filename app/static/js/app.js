@@ -15,13 +15,20 @@
     chat: document.getElementById("chat"),
     inputWrap: document.getElementById("inputWrap"),
     textInput: document.getElementById("textInput"),
+    chipsWrap: document.getElementById("chipsWrap"),
+    chipsContainer: document.getElementById("chipsContainer"),
   };
+
+  const AUDIO_ENABLED_KEY = "audio_enabled";
 
   let state = STATES.INIT;
   let isWorking = false;
   let mediaRecorder = null;
   let mediaStream = null;
   let audioChunks = [];
+  let draftText = "";
+  let lastAssistantText = "";
+  let audioEnabled = localStorage.getItem(AUDIO_ENABLED_KEY) !== "false";
 
   function scrollChatToBottom() {
     ui.chat.scrollTop = ui.chat.scrollHeight;
@@ -32,8 +39,16 @@
     bubble.className = `chat-bubble chat-bubble-enter ${role === "user" ? "chat-user" : "chat-assistant"}`;
     bubble.textContent = content;
     ui.chat.appendChild(bubble);
+    if (role === "assistant") {
+      lastAssistantText = content || "";
+    }
     scrollChatToBottom();
     return bubble;
+  }
+
+  function persistAudioPreference(value) {
+    audioEnabled = value;
+    localStorage.setItem(AUDIO_ENABLED_KEY, String(value));
   }
 
   function appendAudioPlayer(base64Audio, mimeType = "audio/mpeg", bubble = null) {
@@ -50,37 +65,107 @@
     toggle.textContent = "🔊";
     toggle.setAttribute("aria-label", "Play audio response");
 
-    const setPaused = () => {
+    const setMuted = () => {
       toggle.textContent = "🔊";
       toggle.setAttribute("aria-label", "Play audio response");
     };
 
     const setPlaying = () => {
-      toggle.textContent = "⏸";
-      toggle.setAttribute("aria-label", "Pause audio response");
+      toggle.textContent = "🔇";
+      toggle.setAttribute("aria-label", "Stop audio response");
     };
 
     toggle.addEventListener("click", async () => {
       if (audio.paused) {
         try {
           await audio.play();
+          persistAudioPreference(true);
           setPlaying();
         } catch (error) {
-          setPaused();
+          setMuted();
         }
       } else {
         audio.pause();
-        setPaused();
+        audio.currentTime = 0;
+        persistAudioPreference(false);
+        setMuted();
       }
     });
 
-    audio.addEventListener("pause", setPaused);
-    audio.addEventListener("ended", setPaused);
+    audio.addEventListener("pause", setMuted);
+    audio.addEventListener("ended", setMuted);
     audio.addEventListener("play", setPlaying);
 
     targetBubble.appendChild(toggle);
     targetBubble.appendChild(audio);
+
+    if (audioEnabled) {
+      audio.play().catch(() => {
+        setMuted();
+      });
+    } else {
+      setMuted();
+    }
+
     scrollChatToBottom();
+  }
+
+  function detectQuickReplies(text) {
+    if (!text) return [];
+    const normalized = text.toLowerCase();
+    const options = [];
+
+    if (/\b(yes|no|ja|nein)\b/.test(normalized) || /\?$/.test(normalized)) {
+      if (/\b(yes|ja)\b/.test(normalized) || /\b(no|nein)\b/.test(normalized) || /\boder\b|\bor\b/.test(normalized)) {
+        options.push("Ja", "Nein");
+      }
+    }
+
+    const thresholdMatch = text.match(/([<>]=?|über|unter|mehr als|weniger als)\s*([\d'.,]+\s*(?:chf|eur|€|fr|franken)?)/gi);
+    if (thresholdMatch && thresholdMatch.length >= 1) {
+      const cleaned = thresholdMatch.map((item) => item.trim());
+      cleaned.slice(0, 2).forEach((item) => options.push(item));
+    }
+
+    if (!options.length) {
+      const eitherOr = text.match(/\b([^?.!\n]{1,35})\s+(?:oder|or)\s+([^?.!\n]{1,35})\b/i);
+      if (eitherOr) {
+        options.push(eitherOr[1].trim(), eitherOr[2].trim());
+      }
+    }
+
+    return [...new Set(options)].slice(0, 4);
+  }
+
+  function renderQuickReplyChips() {
+    if (state !== STATES.IDLE) {
+      ui.chipsWrap.classList.add("hidden");
+      ui.chipsContainer.innerHTML = "";
+      return;
+    }
+
+    const quickReplies = detectQuickReplies(lastAssistantText);
+    if (!quickReplies.length) {
+      ui.chipsWrap.classList.add("hidden");
+      ui.chipsContainer.innerHTML = "";
+      return;
+    }
+
+    ui.chipsContainer.innerHTML = "";
+    quickReplies.forEach((value) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "quick-chip";
+      chip.textContent = value;
+      chip.addEventListener("click", () => {
+        draftText = value;
+        ui.textInput.value = draftText;
+        setState(STATES.REVIEW);
+      });
+      ui.chipsContainer.appendChild(chip);
+    });
+
+    ui.chipsWrap.classList.remove("hidden");
   }
 
   function setStatus(text) {
@@ -98,6 +183,7 @@
       ui.inputWrap.classList.add("hidden");
       ui.language.disabled = false;
       setStatus("Ready to initialize");
+      renderQuickReplyChips();
       return;
     }
 
@@ -108,6 +194,7 @@
       ui.inputWrap.classList.add("hidden");
       ui.language.disabled = true;
       setStatus("Ready to record");
+      renderQuickReplyChips();
       return;
     }
 
@@ -117,6 +204,7 @@
       ui.label.textContent = "Stop";
       ui.inputWrap.classList.add("hidden");
       setStatus("Recording...");
+      renderQuickReplyChips();
       return;
     }
 
@@ -125,6 +213,7 @@
     ui.label.textContent = "Send";
     ui.inputWrap.classList.remove("hidden");
     setStatus("Ready to edit");
+    renderQuickReplyChips();
   }
 
   function setWorking(working) {
@@ -241,7 +330,8 @@
       }
 
       const data = await response.json();
-      ui.textInput.value = data.transcription || "";
+      draftText = data.transcription || "";
+      ui.textInput.value = draftText;
       setState(STATES.REVIEW);
     } catch (error) {
       appendBubble("assistant", error.message || "Could not transcribe audio.");
@@ -279,6 +369,7 @@
       appendBubble("user", text);
       const bubble = appendBubble("assistant", data.reply || "No reply returned.");
       appendAudioPlayer(data.reply_audio, data.reply_audio_mime, bubble);
+      draftText = "";
       ui.textInput.value = "";
       setState(STATES.IDLE);
     } catch (error) {
@@ -310,6 +401,10 @@
     }
 
     await sendEditedMessage();
+  });
+
+  ui.textInput.addEventListener("input", () => {
+    draftText = ui.textInput.value;
   });
 
   window.addEventListener("beforeunload", () => {

@@ -120,6 +120,22 @@ body {
   transform: scale(0.96);
 }
 
+.quick-chip {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.35rem 0.7rem;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.quick-chip:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
 @keyframes bubbleIn {
   from {
     opacity: 0;
