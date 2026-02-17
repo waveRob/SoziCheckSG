@@ -17,13 +17,13 @@
     <div id="chat" class="mb-4 h-[52vh] overflow-y-auto rounded-2xl bg-slate-50 p-4 sm:h-[56vh]"></div>
 
     <div id="inputWrap" class="mb-4 hidden">
-      <label for="textInput" class="mb-1 block text-sm text-slate-600">Type your message (temporary stand-in for audio)</label>
-      <input
+      <label for="textInput" class="mb-1 block text-sm text-slate-600">Review and edit your transcription</label>
+      <textarea
         id="textInput"
-        type="text"
-        placeholder="Type what you would say..."
+        rows="3"
+        placeholder="Edit text before sending..."
         class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-      />
+      ></textarea>
     </div>
 
     <div class="mt-auto flex flex-col items-center gap-2">
@@ -31,7 +31,7 @@
         <span id="mainActionIcon" class="text-2xl">⚙</span>
         <span id="mainActionLabel" class="text-sm font-medium">Initialize</span>
       </button>
-      <p id="statusText" class="text-xs text-slate-500">State: init</p>
+      <p id="statusText" class="text-xs text-slate-500">Ready to initialize</p>
     </div>
   </section>
 </main>

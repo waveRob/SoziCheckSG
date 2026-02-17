@@ -27,11 +27,15 @@
   background: #4f46e5;
 }
 
+.main-button.state-idle {
+  background: #0891b2;
+}
+
 .main-button.state-recording {
   background: #dc2626;
 }
 
-.main-button.state-ready {
+.main-button.state-review {
   background: #0f766e;
 }
 

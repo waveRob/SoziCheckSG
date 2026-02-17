@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.services.session import session_store
@@ -8,8 +8,8 @@ from app.services.session import session_store
 router = APIRouter()
 
 
-class UploadPayload(BaseModel):
-    text: str | None = None
+class SendMessagePayload(BaseModel):
+    text: str
 
 
 @router.post("/initialize")
@@ -23,8 +23,8 @@ def initialize(request: Request, language: str = Form("de")) -> JSONResponse:
     response = JSONResponse(
         {
             "ok": True,
-            "state": "recording",
-            "message": "Initialized. You can speak now.",
+            "state": "idle",
+            "message": "Initialized. Ready to record.",
         }
     )
     response.set_cookie("session_id", session_id, httponly=True, samesite="lax")
@@ -32,23 +32,39 @@ def initialize(request: Request, language: str = Form("de")) -> JSONResponse:
 
 
 @router.post("/upload-audio")
-def upload_audio(request: Request, payload: UploadPayload) -> JSONResponse:
+async def upload_audio(request: Request, audio: UploadFile = File(...)) -> JSONResponse:
     session_id = request.cookies.get("session_id")
     if not session_id:
-        return JSONResponse(
-            {
-                "ok": False,
-                "error": "Session not initialized.",
-            },
-            status_code=400,
-        )
+        return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
 
     state = session_store.get(session_id)
-    text = (payload.text or "").strip()
-    if not text:
-        return JSONResponse({"ok": False, "error": "No text provided."}, status_code=400)
+    if not state.initialized:
+        return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
 
-    assistant_reply = f"Stub reply ({state.language}): I received '{text}'."
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        return JSONResponse({"ok": False, "error": "Uploaded audio is empty."}, status_code=400)
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "transcription": f"stub transcription ({state.language})",
+        }
+    )
+
+
+@router.post("/send-message")
+def send_message(request: Request, payload: SendMessagePayload) -> JSONResponse:
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
+
+    state = session_store.get(session_id)
+    text = payload.text.strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "Text is required."}, status_code=400)
+
+    assistant_reply = f"stub assistant reply ({state.language}): received '{text}'"
 
     state.chat.append({"role": "user", "content": text})
     state.chat.append({"role": "assistant", "content": assistant_reply})
