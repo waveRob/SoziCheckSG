@@ -1,14 +1,24 @@
----
-title: Sozialhilfe-Check Stadt St.Gallen
-emoji: 🪙
-colorFrom: red
-colorTo: blue
-sdk: gradio
-sdk_version: 5.6.0
-app_file: app.py
-pinned: false
-license: cc-by-nc-4.0
-short_description: 'Multilingual voice assistant for welfare support assessment.'
----
+# SoziCheckSG (FastAPI Scaffold)
 
-Check out the configuration reference at https://huggingface.co/docs/hub/spaces-config-reference
+Step 1 scaffold for a production-style rewrite using:
+- FastAPI backend
+- Jinja2 templates
+- TailwindCSS CDN
+- HTMX
+- Minimal vanilla JS state machine
+
+## Run
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000`.
+
+## Step 1 scope
+
+- Project structure scaffolded under `app/`
+- Required endpoints added with placeholder behavior
+- Single-button UI state machine scaffolded
+- Microphone recording intentionally **not implemented** yet
