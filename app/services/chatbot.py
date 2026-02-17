@@ -33,6 +33,10 @@ class ChatbotService:
 
         return ([{"role": "system", "content": translated_role}], translated_context, translated_role)
 
+    @property
+    def client(self) -> OpenAI:
+        return self._openai
+
     def transcribe_audio(self, audio_bytes: bytes, filename: str) -> str:
         file_obj = io.BytesIO(audio_bytes)
         file_obj.name = filename

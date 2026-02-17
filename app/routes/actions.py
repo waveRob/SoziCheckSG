@@ -1,8 +1,11 @@
+import os
+
 from pydantic import BaseModel
 
 from fastapi import APIRouter, File, Form, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
+from app.services.analysis import conversation_concluded, create_analysis_pdf
 from app.services.chatbot import chatbot_service
 from app.services.config import DEFAULT_LANGUAGE, LANGUAGE_CONFIG
 from app.services.session import session_store
@@ -82,12 +85,22 @@ def send_message(request: Request, payload: SendMessagePayload) -> JSONResponse:
 
     audio_base64, audio_mime = chatbot_service.text_to_speech(assistant_reply, state.language)
 
+    pdf_ready = False
+    pdf_download_url = None
+    if conversation_concluded(state.chat):
+        pdf_path = create_analysis_pdf(state.chat, state.language)
+        state.pdf_path = pdf_path
+        pdf_ready = True
+        pdf_download_url = "/download-pdf"
+
     return JSONResponse(
         {
             "ok": True,
             "reply": assistant_reply,
             "reply_audio": audio_base64,
             "reply_audio_mime": audio_mime,
+            "pdf_ready": pdf_ready,
+            "pdf_download_url": pdf_download_url,
         }
     )
 
@@ -110,10 +123,19 @@ def generate_pdf(request: Request) -> JSONResponse:
     if not session_id:
         return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
 
-    return JSONResponse(
-        {
-            "ok": True,
-            "message": "PDF generation scaffold endpoint ready.",
-            "download_url": None,
-        }
-    )
+    state = session_store.get(session_id)
+    state.pdf_path = create_analysis_pdf(state.chat, state.language)
+    return JSONResponse({"ok": True, "download_url": "/download-pdf"})
+
+
+@router.get("/download-pdf")
+def download_pdf(request: Request):
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
+
+    state = session_store.get(session_id)
+    if not state.pdf_path or not os.path.exists(state.pdf_path):
+        return JSONResponse({"ok": False, "error": "PDF not available."}, status_code=404)
+
+    return FileResponse(path=state.pdf_path, media_type="application/pdf", filename="sozialhilfe-check.pdf")
