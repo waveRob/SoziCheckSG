@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-<main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center p-4 sm:p-6">
-  <section class="w-full rounded-3xl bg-white p-4 shadow-xl sm:p-6">
+<main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col p-4 sm:p-6">
+  <section class="mt-4 flex w-full flex-1 flex-col rounded-3xl bg-white p-4 shadow-xl sm:mt-8 sm:p-6">
     <header class="mb-4 flex items-center justify-between gap-3">
       <h1 class="text-xl font-semibold sm:text-2xl">Sozialhilfe-Check</h1>
       <label class="flex items-center gap-2 text-sm">
@@ -14,20 +14,24 @@
       </label>
     </header>
 
-    <div id="chat" class="mb-5 h-[50vh] overflow-y-auto rounded-2xl bg-slate-50 p-4 sm:h-[55vh]">
-      <div class="chat-bubble chat-assistant">Welcome — tap Initialize to start.</div>
+    <div id="chat" class="mb-4 h-[52vh] overflow-y-auto rounded-2xl bg-slate-50 p-4 sm:h-[56vh]"></div>
+
+    <div id="inputWrap" class="mb-4 hidden">
+      <label for="textInput" class="mb-1 block text-sm text-slate-600">Type your message (temporary stand-in for audio)</label>
+      <input
+        id="textInput"
+        type="text"
+        placeholder="Type what you would say..."
+        class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      />
     </div>
 
-    <div class="flex flex-col items-center gap-2">
-      <button
-        id="mainActionButton"
-        type="button"
-        class="main-button state-initialize"
-      >
-        <span id="mainActionIcon" class="text-2xl">▶</span>
+    <div class="mt-auto flex flex-col items-center gap-2">
+      <button id="mainActionButton" type="button" class="main-button state-init">
+        <span id="mainActionIcon" class="text-2xl">⚙</span>
         <span id="mainActionLabel" class="text-sm font-medium">Initialize</span>
       </button>
-      <p id="statusText" class="text-xs text-slate-500">State: Initialize</p>
+      <p id="statusText" class="text-xs text-slate-500">State: init</p>
     </div>
   </section>
 </main>

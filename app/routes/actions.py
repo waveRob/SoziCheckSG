@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Form, Request, UploadFile
+from pydantic import BaseModel
+
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import JSONResponse
 
 from app.services.session import session_store
 
 router = APIRouter()
+
+
+class UploadPayload(BaseModel):
+    text: str | None = None
 
 
 @router.post("/initialize")
@@ -13,20 +19,12 @@ def initialize(request: Request, language: str = Form("de")) -> JSONResponse:
     state = session_store.get(session_id)
     state.initialized = True
     state.language = language
-    if not state.chat:
-        state.chat.append(
-            {
-                "role": "assistant",
-                "content": "Willkommen! Die Unterhaltung wurde initialisiert.",
-            }
-        )
 
     response = JSONResponse(
         {
             "ok": True,
             "state": "recording",
-            "chat": state.chat,
-            "message": "Session initialized (scaffold).",
+            "message": "Initialized. You can speak now.",
         }
     )
     response.set_cookie("session_id", session_id, httponly=True, samesite="lax")
@@ -34,7 +32,7 @@ def initialize(request: Request, language: str = Form("de")) -> JSONResponse:
 
 
 @router.post("/upload-audio")
-def upload_audio(request: Request, audio: UploadFile | None = None) -> JSONResponse:
+def upload_audio(request: Request, payload: UploadPayload) -> JSONResponse:
     session_id = request.cookies.get("session_id")
     if not session_id:
         return JSONResponse(
@@ -46,19 +44,19 @@ def upload_audio(request: Request, audio: UploadFile | None = None) -> JSONRespo
         )
 
     state = session_store.get(session_id)
-    state.chat.append(
-        {
-            "role": "assistant",
-            "content": "Audio processing is not implemented in Step 1 scaffold yet.",
-        }
-    )
+    text = (payload.text or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "No text provided."}, status_code=400)
+
+    assistant_reply = f"Stub reply ({state.language}): I received '{text}'."
+
+    state.chat.append({"role": "user", "content": text})
+    state.chat.append({"role": "assistant", "content": assistant_reply})
 
     return JSONResponse(
         {
             "ok": True,
-            "transcript": "",
-            "assistant_response": "Audio processing placeholder.",
-            "chat": state.chat,
+            "reply": assistant_reply,
         }
     )
 
