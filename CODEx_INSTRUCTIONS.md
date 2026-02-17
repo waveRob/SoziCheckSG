@@ -20,32 +20,41 @@ This is NOT a demo tool. It must look like a real product.
 ------------------------------------------------------------
 CORE REQUIREMENTS
 ------------------------------------------------------------
+Recording must be triggered by a real browser click event
+(because of getUserMedia security restrictions).
 
-1. SINGLE BUTTON UX
+There must be ONE main button that changes behavior depending on state.
 
-There must be one main button that changes behavior depending on state:
-
-State 1: "Initialize"
-State 2: "Recording"
-State 3: "Ready to Send"
+State A: "Initialize"
+State B: "Ready to Record"
+State C: "Recording"
+State D: "Review & Edit"
+(plus a temporary "Busy" sub-state while transcribing/sending)
 
 Button logic:
 
 - When in "Initialize":
-    - Initialize conversation
+    - Initialize conversation/session
+    - Selected Language will be set and can not be changed anymore
+    - Transition to "Ready to Record"
+
+- When in "Ready to Record":
+    - Start microphone recording (MediaRecorder)
     - Transition to "Recording"
 
 - When in "Recording":
     - Stop recording (MediaRecorder)
-    - Transition to "Ready to Send"
+    - Upload raw audio to backend for speech-to-text ONLY
+    - Backend returns transcription text
+    - Populate an editable textbox/textarea with the transcription
+    - Transition to "Review & Edit"
 
-- When in "Ready to Send":
-    - Upload recorded audio to backend
-    - Backend processes speech-to-text
-    - Backend calls OpenAI API
-    - Backend returns response
-    - UI updates chat
-    - Return to "Recording" state
+- When in "Review & Edit":
+    - User can edit the transcription in the textbox/textarea
+    - On button tap: send the edited text to backend
+    - Backend calls OpenAI API and returns assistant response
+    - UI updates chat (user bubble + assistant bubble)
+    - Clear textbox and transition back to "Ready to Record"
 
 Recording must be triggered by a real browser click event
 (because of getUserMedia security restrictions).
