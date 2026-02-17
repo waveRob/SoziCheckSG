@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center p-4 sm:p-6">
+  <section class="w-full rounded-3xl bg-white p-4 shadow-xl sm:p-6">
+    <header class="mb-4 flex items-center justify-between gap-3">
+      <h1 class="text-xl font-semibold sm:text-2xl">Sozialhilfe-Check</h1>
+      <label class="flex items-center gap-2 text-sm">
+        <span class="text-slate-600">Language</span>
+        <select id="language" class="rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <option value="de" {% if default_language == 'de' %}selected{% endif %}>Deutsch</option>
+          <option value="en" {% if default_language == 'en' %}selected{% endif %}>English</option>
+          <option value="fr" {% if default_language == 'fr' %}selected{% endif %}>Français</option>
+        </select>
+      </label>
+    </header>
+
+    <div id="chat" class="mb-4 h-[48vh] overflow-y-auto rounded-2xl bg-slate-50 p-4 sm:h-[52vh]">
+      <div class="chat-bubble chat-assistant">Welcome — tap Initialize to begin.</div>
+    </div>
+
+    <div id="typingArea" class="mb-4 hidden">
+      <label for="typedInput" class="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">Temporary text input (stand-in for microphone)</label>
+      <input
+        id="typedInput"
+        type="text"
+        placeholder="Type your message, then tap Recording…"
+        class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+      />
+      <p class="mt-1 text-xs text-slate-500">Main button remains the only primary action.</p>
+    </div>
+
+    <div class="flex flex-col items-center gap-2">
+      <button id="mainActionButton" type="button" class="main-button state-init" aria-live="polite">
+        <span id="mainActionIcon" class="text-2xl">▶</span>
+        <span id="mainActionLabel" class="text-sm font-medium">Initialize</span>
+      </button>
+      <p id="statusText" class="text-xs text-slate-500">State: init</p>
+    </div>
+  </section>
+</main>
+{% endblock %}
