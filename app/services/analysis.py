@@ -62,6 +62,11 @@ def _build_chat_text(chat_history: List[Dict[str, str]]) -> str:
     return "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in chat_history[1:]])
 
 
+def _normalize_summary_line(line: str) -> str:
+    cleaned_line = re.sub(r"^[\s\-•·*]+", "", line).strip()
+    return cleaned_line
+
+
 def conversation_concluded(chat_history: List[Dict[str, str]], max_length: int = 30) -> bool:
     if len(chat_history) <= 2:
         return False
@@ -207,8 +212,9 @@ def create_analysis_pdf(msg_history: List[Dict[str, str]], target_language: str,
 
     summary = create_summary(msg_history)
     for line in summary.split("\n"):
-        if line.strip():
-            flow.append(Paragraph(f"• {line.strip()}", summary_style))
+        normalized_line = _normalize_summary_line(line)
+        if normalized_line:
+            flow.append(Paragraph(f"• {normalized_line}", summary_style))
             flow.append(Spacer(1, 3))
 
     flow.extend([Spacer(1, 10), Paragraph("Gesprächsprotokoll (Deutsch)", section_style), Spacer(1, 8)])
