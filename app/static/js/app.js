@@ -138,10 +138,9 @@
       chip.type = "button";
       chip.className = "quick-chip";
       chip.textContent = value;
-      chip.addEventListener("click", () => {
-        draftText = value;
-        ui.textInput.value = draftText;
-        setState(STATES.REVIEW);
+      chip.addEventListener("click", async () => {
+        if (isWorking) return;
+        await sendEditedMessage(value);
       });
       ui.chipsContainer.appendChild(chip);
     });
@@ -370,8 +369,27 @@
     }
   }
 
-  async function sendEditedMessage() {
-    const text = ui.textInput.value.trim();
+  function appendPdfDownload(downloadUrl) {
+    if (!downloadUrl) return;
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble chat-bubble-enter chat-assistant";
+
+    const text = document.createElement("p");
+    text.textContent = "Konversation abgeschlossen. PDF herunterladen:";
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.textContent = "Download PDF";
+    link.className = "text-sky-700 underline";
+    link.setAttribute("download", "sozialhilfe-check.pdf");
+
+    bubble.appendChild(text);
+    bubble.appendChild(link);
+    ui.chat.appendChild(bubble);
+    scrollChatToBottom();
+  }
+
+  async function sendEditedMessage(prefilledText = null) {
+    const text = (prefilledText ?? ui.textInput.value).trim();
     if (!text) {
       appendBubble("assistant", "Please enter text before sending.");
       return;
@@ -395,6 +413,9 @@
       appendBubble("user", text);
       const bubble = appendBubble("assistant", data.reply || "No reply returned.");
       appendAudioPlayer(data.reply_audio, data.reply_audio_mime, bubble);
+      if (data.pdf_ready && data.pdf_download_url) {
+        appendPdfDownload(data.pdf_download_url);
+      }
       draftText = "";
       ui.textInput.value = "";
       setState(STATES.IDLE);

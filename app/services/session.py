@@ -13,6 +13,7 @@ class SessionState:
     language: str = DEFAULT_LANGUAGE
     initialized: bool = False
     chat: List[Dict[str, str]] = field(default_factory=list)
+    pdf_path: str | None = None
 
     @property
     def language_code(self) -> str:
