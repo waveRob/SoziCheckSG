@@ -58,6 +58,69 @@ class ChatbotService:
         completion = self._openai.chat.completions.create(model="gpt-4o-mini", messages=messages, max_completion_tokens=300)
         return (completion.choices[0].message.content or text).strip()
 
+
+    def suggest_short_answers(self, text: str, language_key: str) -> List[str]:
+        cleaned_text = text.strip()
+        if not cleaned_text:
+            return []
+
+        language_label = LANGUAGE_CONFIG.get(language_key, LANGUAGE_CONFIG[DEFAULT_LANGUAGE])["label"]
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You analyze a single assistant message and decide whether short quick-reply answers are helpful. "
+                    "Return JSON only, with schema: {\"answers\": [string, ...]}. "
+                    "Rules: max 4 answers, each <= 30 chars, no duplicates, no punctuation-only entries. "
+                    "If no clear short answers exist, return {\"answers\": []}."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Language: {language_label}.\n"
+                    f"Assistant message:\n{cleaned_text}\n\n"
+                    "Return only JSON."
+                ),
+            },
+        ]
+
+        try:
+            completion = self._openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=messages,
+                max_completion_tokens=120,
+                temperature=0,
+            )
+        except Exception:
+            return []
+
+        raw = (completion.choices[0].message.content or "").strip()
+        if not raw:
+            return []
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+
+        answers = payload.get("answers", [])
+        if not isinstance(answers, list):
+            return []
+
+        normalized = []
+        for item in answers:
+            if not isinstance(item, str):
+                continue
+            value = item.strip()
+            if not value:
+                continue
+            if len(value) > 30:
+                continue
+            normalized.append(value)
+
+        return list(dict.fromkeys(normalized))[:4]
+
     def text_to_speech(self, text: str, language_key: str) -> Tuple[str | None, str | None]:
         credentials = os.getenv("GOOGLE_CREDENTIALS")
         if not credentials:

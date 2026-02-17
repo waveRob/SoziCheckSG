@@ -14,6 +14,10 @@ class SendMessagePayload(BaseModel):
     text: str
 
 
+class QuickRepliesPayload(BaseModel):
+    text: str
+
+
 @router.post("/initialize")
 def initialize(request: Request, language: str = Form(DEFAULT_LANGUAGE)) -> JSONResponse:
     language = language if language in LANGUAGE_CONFIG else DEFAULT_LANGUAGE
@@ -86,6 +90,18 @@ def send_message(request: Request, payload: SendMessagePayload) -> JSONResponse:
             "reply_audio_mime": audio_mime,
         }
     )
+
+
+@router.post("/quick-replies")
+def quick_replies(request: Request, payload: QuickRepliesPayload) -> JSONResponse:
+    session_id = request.cookies.get("session_id")
+    if not session_id:
+        return JSONResponse({"ok": False, "error": "Session not initialized."}, status_code=400)
+
+    state = session_store.get(session_id)
+    replies = chatbot_service.suggest_short_answers(payload.text, state.language)
+
+    return JSONResponse({"ok": True, "quick_replies": replies})
 
 
 @router.post("/generate-pdf")
