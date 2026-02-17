@@ -7,9 +7,9 @@
       <label class="flex items-center gap-2 text-sm">
         <span class="text-slate-600">Language</span>
         <select id="language" class="rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-          <option value="de" {% if default_language == 'de' %}selected{% endif %}>Deutsch</option>
-          <option value="en" {% if default_language == 'en' %}selected{% endif %}>English</option>
-          <option value="fr" {% if default_language == 'fr' %}selected{% endif %}>Français</option>
+          {% for option in language_options %}
+          <option value="{{ option.value }}" {% if default_language == option.value %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
         </select>
       </label>
     </header>

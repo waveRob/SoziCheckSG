@@ -5,28 +5,32 @@ from threading import Lock
 from typing import Dict, List
 from uuid import uuid4
 
+from app.services.config import DEFAULT_LANGUAGE, LANGUAGE_CONFIG
+
 
 @dataclass
 class SessionState:
-    language: str = "de"
+    language: str = DEFAULT_LANGUAGE
     initialized: bool = False
     chat: List[Dict[str, str]] = field(default_factory=list)
 
+    @property
+    def language_code(self) -> str:
+        return LANGUAGE_CONFIG.get(self.language, LANGUAGE_CONFIG[DEFAULT_LANGUAGE])["code"]
+
 
 class SessionStore:
-    """Simple in-memory session store scaffold for Step 1."""
-
     def __init__(self) -> None:
         self._store: Dict[str, SessionState] = {}
         self._lock = Lock()
 
-    def new_session(self, language: str = "de") -> str:
+    def new_session(self, language: str = DEFAULT_LANGUAGE) -> str:
         session_id = str(uuid4())
         with self._lock:
             self._store[session_id] = SessionState(language=language)
         return session_id
 
-    def get_or_create(self, session_id: str | None, language: str = "de") -> str:
+    def get_or_create(self, session_id: str | None, language: str = DEFAULT_LANGUAGE) -> str:
         if session_id:
             with self._lock:
                 if session_id in self._store:
