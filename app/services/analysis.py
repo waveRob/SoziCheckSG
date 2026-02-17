@@ -7,11 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.lib.enums import TA_LEFT
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.services.chatbot import chatbot_service
 
@@ -99,12 +100,15 @@ def _add_header_and_page_number(canvas, doc):
     canvas.saveState()
     page_num = canvas.getPageNumber()
     canvas.setFont("Helvetica", 9)
+    canvas.setFillColor(colors.HexColor("#4B5563"))
     canvas.drawCentredString(A4[0] / 2, 1 * cm, f"Seite {page_num}")
 
     if hasattr(doc, "logo_path") and doc.logo_path and os.path.exists(doc.logo_path):
-        canvas.drawImage(doc.logo_path, 1 * cm, A4[1] - 3 * cm, width=3 * cm, height=3 * cm, preserveAspectRatio=True, mask="auto")
+        canvas.drawImage(doc.logo_path, 1.2 * cm, A4[1] - 2.8 * cm, width=2.4 * cm, height=2.4 * cm, preserveAspectRatio=True, mask="auto")
 
-    canvas.line(1 * cm, A4[1] - 3.2 * cm, A4[0] - 1 * cm, A4[1] - 3.2 * cm)
+    canvas.setStrokeColor(colors.HexColor("#D1D5DB"))
+    canvas.setLineWidth(1)
+    canvas.line(1 * cm, A4[1] - 3.0 * cm, A4[0] - 1 * cm, A4[1] - 3.0 * cm)
     canvas.restoreState()
 
 
@@ -117,46 +121,117 @@ def create_analysis_pdf(msg_history: List[Dict[str, str]], target_language: str,
     doc.logo_path = str(Path(logo_path))
 
     styles = getSampleStyleSheet()
-    user_style = ParagraphStyle(name="UserChat", parent=styles["Normal"], alignment=TA_LEFT, fontSize=10, leading=13, spaceAfter=5, leftIndent=0)
-    assistant_style = ParagraphStyle(name="AssistantChat", parent=styles["Normal"], alignment=TA_LEFT, fontSize=10, leading=13, spaceAfter=5, leftIndent=25)
+    title_style = ParagraphStyle(
+        name="ReportTitle",
+        parent=styles["Heading1"],
+        fontSize=18,
+        leading=22,
+        textColor=colors.HexColor("#1F2937"),
+        spaceAfter=6,
+    )
+    section_style = ParagraphStyle(
+        name="SectionTitle",
+        parent=styles["Heading3"],
+        fontSize=12,
+        leading=15,
+        textColor=colors.HexColor("#111827"),
+        spaceAfter=6,
+        spaceBefore=8,
+    )
+    meta_style = ParagraphStyle(
+        name="MetaText",
+        parent=styles["Normal"],
+        fontSize=9,
+        leading=11,
+        textColor=colors.HexColor("#374151"),
+    )
+    summary_style = ParagraphStyle(
+        name="SummaryText",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=14,
+        textColor=colors.HexColor("#111827"),
+        leftIndent=6,
+    )
+    user_style = ParagraphStyle(
+        name="UserChat",
+        parent=styles["Normal"],
+        alignment=TA_LEFT,
+        fontSize=10,
+        leading=14,
+        spaceAfter=6,
+        leftIndent=0,
+        textColor=colors.HexColor("#111827"),
+    )
+    assistant_style = ParagraphStyle(
+        name="AssistantChat",
+        parent=styles["Normal"],
+        alignment=TA_LEFT,
+        fontSize=10,
+        leading=14,
+        spaceAfter=6,
+        leftIndent=0,
+        textColor=colors.HexColor("#1F2937"),
+    )
+
+    meta_table = Table(
+        [
+            [Paragraph("<b>Exportdatum</b>", meta_style), Paragraph(timestamp, meta_style)],
+            [Paragraph("<b>Sprache</b>", meta_style), Paragraph(target_language.capitalize(), meta_style)],
+        ],
+        colWidths=[3.2 * cm, 10.8 * cm],
+    )
+    meta_table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F9FAFB")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]
+        )
+    )
 
     flow = [
-        Paragraph(f"<b>Exportdatum:</b> {timestamp}", styles["Normal"]),
+        Paragraph("Sozialhilfe-Check St.Gallen", title_style),
+        Paragraph("Dokumentation des Beratungsgesprächs", meta_style),
         Spacer(1, 12),
-        Paragraph("<b>Sozialhilfe-Check St.Gallen</b>", styles["Heading2"]),
+        meta_table,
         Spacer(1, 12),
-        Paragraph("<b>DEUTSCH</b>", styles["Heading3"]),
-        Paragraph("<b>Übersicht:</b>"),
+        Paragraph("Übersicht", section_style),
         Spacer(1, 8),
     ]
 
     summary = create_summary(msg_history)
     for line in summary.split("\n"):
         if line.strip():
-            flow.append(Paragraph(line.strip(), styles["Normal"]))
-            flow.append(Spacer(1, 4))
+            flow.append(Paragraph(f"• {line.strip()}", summary_style))
+            flow.append(Spacer(1, 3))
 
-    flow.extend([Spacer(1, 12), Spacer(1, 12)])
+    flow.extend([Spacer(1, 10), Paragraph("Gesprächsprotokoll (Deutsch)", section_style), Spacer(1, 8)])
 
     for msg in msg_history[2:]:
         text = _remove_emojis(msg["content"]).replace("\n", "<br/>")
         if target_language != "german":
             text = chatbot_service.translate_text(text, "de")
         if msg["role"] == "user":
-            flow.append(Paragraph(f"<b>Beantragende:r:</b> {text}", user_style))
+            flow.append(Paragraph(f"<b>Beantragende Person</b><br/>{text}", user_style))
         else:
-            flow.append(Paragraph(f"<b>Sozi-Bot:</b> {text}", assistant_style))
+            flow.append(Paragraph(f"<b>Sozi-Bot</b><br/>{text}", assistant_style))
 
     flow.append(Spacer(1, 12))
 
     if target_language != "german":
-        flow.append(Paragraph(f"<b>{target_language.capitalize()}</b>", styles["Heading3"]))
+        flow.append(Paragraph(f"Gesprächsprotokoll ({target_language.capitalize()})", section_style))
         for msg in msg_history[2:]:
             text = _remove_emojis(msg["content"]).replace("\n", "<br/>")
             if msg["role"] == "user":
-                flow.append(Paragraph(f"<b>Beantragende:r:</b> {text}", user_style))
+                flow.append(Paragraph(f"<b>Beantragende Person</b><br/>{text}", user_style))
             else:
-                flow.append(Paragraph(f"<b>Sozi-Bot:</b> {text}", assistant_style))
+                flow.append(Paragraph(f"<b>Sozi-Bot</b><br/>{text}", assistant_style))
         flow.append(Spacer(1, 12))
 
     doc.build(flow, onFirstPage=_add_header_and_page_number, onLaterPages=_add_header_and_page_number)
