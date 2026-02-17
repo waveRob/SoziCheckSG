@@ -29,22 +29,57 @@
 
   function appendBubble(role, content) {
     const bubble = document.createElement("div");
-    bubble.className = `chat-bubble ${role === "user" ? "chat-user" : "chat-assistant"}`;
+    bubble.className = `chat-bubble chat-bubble-enter ${role === "user" ? "chat-user" : "chat-assistant"}`;
     bubble.textContent = content;
     ui.chat.appendChild(bubble);
     scrollChatToBottom();
+    return bubble;
   }
 
-  function appendAudioPlayer(base64Audio, mimeType = "audio/mpeg") {
+  function appendAudioPlayer(base64Audio, mimeType = "audio/mpeg", bubble = null) {
     if (!base64Audio) return;
-    const wrapper = document.createElement("div");
-    wrapper.className = "mb-3";
-    const player = document.createElement("audio");
-    player.controls = true;
-    player.autoplay = true;
-    player.src = `data:${mimeType};base64,${base64Audio}`;
-    wrapper.appendChild(player);
-    ui.chat.appendChild(wrapper);
+
+    const targetBubble = bubble || appendBubble("assistant", "");
+    const audio = document.createElement("audio");
+    audio.src = `data:${mimeType};base64,${base64Audio}`;
+    audio.preload = "none";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "audio-toggle";
+    toggle.textContent = "🔊";
+    toggle.setAttribute("aria-label", "Play audio response");
+
+    const setPaused = () => {
+      toggle.textContent = "🔊";
+      toggle.setAttribute("aria-label", "Play audio response");
+    };
+
+    const setPlaying = () => {
+      toggle.textContent = "⏸";
+      toggle.setAttribute("aria-label", "Pause audio response");
+    };
+
+    toggle.addEventListener("click", async () => {
+      if (audio.paused) {
+        try {
+          await audio.play();
+          setPlaying();
+        } catch (error) {
+          setPaused();
+        }
+      } else {
+        audio.pause();
+        setPaused();
+      }
+    });
+
+    audio.addEventListener("pause", setPaused);
+    audio.addEventListener("ended", setPaused);
+    audio.addEventListener("play", setPlaying);
+
+    targetBubble.appendChild(toggle);
+    targetBubble.appendChild(audio);
     scrollChatToBottom();
   }
 
@@ -72,7 +107,7 @@
       ui.label.textContent = "Start Recording";
       ui.inputWrap.classList.add("hidden");
       ui.language.disabled = true;
-      setStatus("Tap to start recording");
+      setStatus("Ready to record");
       return;
     }
 
@@ -100,6 +135,7 @@
 
   async function initializeSession() {
     setWorking(true);
+    setStatus("Initializing...");
     try {
       const fd = new FormData();
       fd.append("language", ui.language.value);
@@ -108,8 +144,8 @@
         throw new Error("Initialize failed");
       }
       const data = await response.json();
-      appendBubble("assistant", data.intro || "Initialized. You can start recording.");
-      appendAudioPlayer(data.intro_audio, data.intro_audio_mime);
+      const bubble = appendBubble("assistant", data.intro || "Initialized. You can start recording.");
+      appendAudioPlayer(data.intro_audio, data.intro_audio_mime, bubble);
       setState(STATES.IDLE);
     } catch (error) {
       appendBubble("assistant", "Initialization failed. Please try again.");
@@ -241,8 +277,8 @@
 
       const data = await response.json();
       appendBubble("user", text);
-      appendBubble("assistant", data.reply || "No reply returned.");
-      appendAudioPlayer(data.reply_audio, data.reply_audio_mime);
+      const bubble = appendBubble("assistant", data.reply || "No reply returned.");
+      appendAudioPlayer(data.reply_audio, data.reply_audio_mime, bubble);
       ui.textInput.value = "";
       setState(STATES.IDLE);
     } catch (error) {
