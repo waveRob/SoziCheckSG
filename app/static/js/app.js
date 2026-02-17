@@ -19,8 +19,6 @@
     chipsContainer: document.getElementById("chipsContainer"),
   };
 
-  const AUDIO_ENABLED_KEY = "audio_enabled";
-
   let state = STATES.INIT;
   let isWorking = false;
   let mediaRecorder = null;
@@ -28,7 +26,6 @@
   let audioChunks = [];
   let draftText = "";
   let lastAssistantText = "";
-  let audioEnabled = localStorage.getItem(AUDIO_ENABLED_KEY) !== "false";
 
   function scrollChatToBottom() {
     ui.chat.scrollTop = ui.chat.scrollHeight;
@@ -44,11 +41,6 @@
     }
     scrollChatToBottom();
     return bubble;
-  }
-
-  function persistAudioPreference(value) {
-    audioEnabled = value;
-    localStorage.setItem(AUDIO_ENABLED_KEY, String(value));
   }
 
   function appendAudioPlayer(base64Audio, mimeType = "audio/mpeg", bubble = null) {
@@ -79,7 +71,6 @@
       if (audio.paused) {
         try {
           await audio.play();
-          persistAudioPreference(true);
           setPlaying();
         } catch (error) {
           setMuted();
@@ -87,7 +78,6 @@
       } else {
         audio.pause();
         audio.currentTime = 0;
-        persistAudioPreference(false);
         setMuted();
       }
     });
@@ -99,13 +89,9 @@
     targetBubble.appendChild(toggle);
     targetBubble.appendChild(audio);
 
-    if (audioEnabled) {
-      audio.play().catch(() => {
-        setMuted();
-      });
-    } else {
+    audio.play().catch(() => {
       setMuted();
-    }
+    });
 
     scrollChatToBottom();
   }
@@ -115,10 +101,8 @@
     const normalized = text.toLowerCase();
     const options = [];
 
-    if (/\b(yes|no|ja|nein)\b/.test(normalized) || /\?$/.test(normalized)) {
-      if (/\b(yes|ja)\b/.test(normalized) || /\b(no|nein)\b/.test(normalized) || /\boder\b|\bor\b/.test(normalized)) {
-        options.push("Ja", "Nein");
-      }
+    if (/\b(yes|no|ja|nein)\b/.test(normalized) || /\?/.test(normalized) || /bitte antworten sie/.test(normalized)) {
+      options.push("Ja", "Nein");
     }
 
     const thresholdMatch = text.match(/([<>]=?|über|unter|mehr als|weniger als)\s*([\d'.,]+\s*(?:chf|eur|€|fr|franken)?)/gi);
@@ -134,18 +118,15 @@
       }
     }
 
+    if (!options.length && /\?/.test(normalized)) {
+      options.push("Ja", "Nein");
+    }
+
     return [...new Set(options)].slice(0, 4);
   }
 
-  function renderQuickReplyChips() {
-    if (state !== STATES.IDLE) {
-      ui.chipsWrap.classList.add("hidden");
-      ui.chipsContainer.innerHTML = "";
-      return;
-    }
-
-    const quickReplies = detectQuickReplies(lastAssistantText);
-    if (!quickReplies.length) {
+  function paintQuickReplyChips(quickReplies) {
+    if (state !== STATES.IDLE || !quickReplies.length) {
       ui.chipsWrap.classList.add("hidden");
       ui.chipsContainer.innerHTML = "";
       return;
@@ -166,6 +147,51 @@
     });
 
     ui.chipsWrap.classList.remove("hidden");
+  }
+
+  async function fetchSmartQuickReplies(text) {
+    if (!text || !text.trim()) return [];
+
+    try {
+      const response = await fetch("/quick-replies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      if (!Array.isArray(data.quick_replies)) {
+        return [];
+      }
+
+      return data.quick_replies
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .slice(0, 4);
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async function renderQuickReplyChips() {
+    if (state !== STATES.IDLE) {
+      paintQuickReplyChips([]);
+      return;
+    }
+
+    const snapshotText = lastAssistantText;
+    const smartReplies = await fetchSmartQuickReplies(snapshotText);
+    if (snapshotText !== lastAssistantText || state !== STATES.IDLE) {
+      return;
+    }
+
+    const quickReplies = smartReplies.length ? smartReplies : detectQuickReplies(snapshotText);
+    paintQuickReplyChips(quickReplies);
   }
 
   function setStatus(text) {
