@@ -35,6 +35,19 @@
     scrollChatToBottom();
   }
 
+  function appendAudioPlayer(base64Audio, mimeType = "audio/mpeg") {
+    if (!base64Audio) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "mb-3";
+    const player = document.createElement("audio");
+    player.controls = true;
+    player.autoplay = true;
+    player.src = `data:${mimeType};base64,${base64Audio}`;
+    wrapper.appendChild(player);
+    ui.chat.appendChild(wrapper);
+    scrollChatToBottom();
+  }
+
   function setStatus(text) {
     ui.status.textContent = text;
   }
@@ -94,7 +107,9 @@
       if (!response.ok) {
         throw new Error("Initialize failed");
       }
-      appendBubble("assistant", "Initialized. You can start recording.");
+      const data = await response.json();
+      appendBubble("assistant", data.intro || "Initialized. You can start recording.");
+      appendAudioPlayer(data.intro_audio, data.intro_audio_mime);
       setState(STATES.IDLE);
     } catch (error) {
       appendBubble("assistant", "Initialization failed. Please try again.");
@@ -227,6 +242,7 @@
       const data = await response.json();
       appendBubble("user", text);
       appendBubble("assistant", data.reply || "No reply returned.");
+      appendAudioPlayer(data.reply_audio, data.reply_audio_mime);
       ui.textInput.value = "";
       setState(STATES.IDLE);
     } catch (error) {
